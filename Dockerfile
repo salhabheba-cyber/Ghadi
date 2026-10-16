@@ -13,4 +13,4 @@ COPY . .
 RUN pnpm build
 EXPOSE 3000
 # Applies pending SQL migrations (idempotent), optionally grants admin to the existing account in ADMIN_EMAIL (remove the variable afterwards), then starts the server on $PORT.
-CMD ["sh", "-c", "pnpm db:migrate && pnpm db:seed && { [ -z "$ADMIN_EMAIL" ] || pnpm user:role "$ADMIN_EMAIL" admin || true; } && pnpm start -p ${PORT:-3000} -H 0.0.0.0"]
+CMD ["sh", "-c", "pnpm db:migrate && pnpm db:seed && { [ -z \"$ADMIN_EMAIL\" ] || pnpm user:role \"$ADMIN_EMAIL\" admin || true; } && pnpm start -p ${PORT:-3000} -H 0.0.0.0"]
