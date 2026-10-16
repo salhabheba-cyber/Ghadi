@@ -5,7 +5,7 @@ WORKDIR /app
 # Local OCR (no third-party service): Tesseract with English/French/Arabic packs, and poppler for PDFs. French/Arabic packs are untested here.
 RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-ara poppler-utils && rm -rf /var/lib/apt/lists/*
 ENV OCR_PROVIDER=tesseract
-RUN corepack enable
+RUN corepack enable && corepack prepare pnpm@10.28.0 --activate
 COPY package.json pnpm-lock.yaml ./
 # devDependencies are kept because the migration/seed scripts run with tsx at start-up.
 RUN pnpm install --frozen-lockfile --prod=false
