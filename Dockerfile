@@ -12,5 +12,5 @@ RUN pnpm install --frozen-lockfile --prod=false
 COPY . .
 RUN pnpm build
 EXPOSE 3000
-# Applies pending SQL migrations (idempotent), optionally grants admin to the existing account in ADMIN_EMAIL (remove the variable afterwards), then starts the server on $PORT.
-CMD ["sh", "-c", "pnpm db:migrate && pnpm db:seed && { [ -z \"$ADMIN_EMAIL\" ] || pnpm user:role \"$ADMIN_EMAIL\" admin || true; } && pnpm start -p ${PORT:-3000} -H 0.0.0.0"]
+# Applies pending SQL migrations (idempotent), optionally creates the owner admin login from ADMIN_EMAIL/ADMIN_PASSWORD (remove ADMIN_PASSWORD afterwards), then starts the server on $PORT.
+CMD ["sh", "-c", "pnpm db:migrate && pnpm db:seed && { pnpm tsx scripts/bootstrap-admin.ts || true; } && pnpm start -p ${PORT:-3000} -H 0.0.0.0"]
