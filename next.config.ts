@@ -21,6 +21,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Standalone output bundles only the files needed to run the server.
+  // Required for the production Docker image (Dockerfile copies .next/standalone).
+  output: "standalone",
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
