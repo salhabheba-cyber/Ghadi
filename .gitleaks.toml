@@ -1,0 +1,12 @@
+# Gitleaks configuration. The default ruleset stays on; only the paths below are excluded.
+title = "Ghadi gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Data file from the repository's earlier history"
+paths = [
+  # Old project's content file: "key" fields are hex record IDs, not credentials. Only present in history.
+  '''(^|/)teacher-lines\.json$''',
+]
