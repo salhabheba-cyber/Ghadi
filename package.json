@@ -65,7 +65,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^5.0.0",
-    "eslint": "^9.0.0",
+    "eslint": "^10.13.0",
     "eslint-config-next": "^16.4.2",
     "fake-indexeddb": "^6.0.0",
     "jsdom": "^27.0.0",
