@@ -7,33 +7,47 @@
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
     "Noto Sans", sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --color-brand-50: #eef2ff;
-  --color-brand-100: #e0e7ff;
-  --color-brand-200: #c7d2fe;
-  --color-brand-400: #818cf8;
-  --color-brand-500: #6366f1;
-  --color-brand-600: #4f46e5;
-  --color-brand-700: #4338ca;
-  --color-brand-900: #312e81;
+
+  /* Ghadi brand palette — warm violet-purple inspired by the Ghadi character */
+  --color-brand-50:  #f5f0ff;
+  --color-brand-100: #ede5ff;
+  --color-brand-200: #dcceff;
+  --color-brand-300: #c4aafd;
+  --color-brand-400: #a87df8;
+  --color-brand-500: #8b52f0;
+  --color-brand-600: #7c3aed;   /* primary: Ghadi purple */
+  --color-brand-700: #6d28d9;
+  --color-brand-800: #5b21b6;
+  --color-brand-900: #3b0d8f;
+
+  /* Accent tones from the character sheet */
+  --color-daisy-400: #fde047;   /* warm yellow — daisy necklace */
+  --color-daisy-500: #facc15;
+  --color-blush-400: #f9a8d4;   /* soft pink — cheeks / stickers */
+  --color-sage-400:  #86efac;   /* soft green — leaves */
 }
 
 :root {
-  --bg: #f8f9fc;
-  --surface: #ffffff;
-  --surface-2: #f1f3f9;
-  --border: #e2e5ee;
-  --text: #151826;
-  --muted: #5b6275;
-  --ring: #4f46e5;
+  /* Light mode: warm off-white with lavender tint */
+  --bg:       #faf8ff;
+  --surface:  #ffffff;
+  --surface-2:#f4f0fd;
+  --border:   #e4ddf7;
+  --text:     #1e1030;
+  --muted:    #6b5c8a;
+  --ring:     #7c3aed;
+  /* Semantic surfaces */
+  --surface-accent: #f0ebff;
 }
 .dark {
-  --bg: #0e1020;
-  --surface: #171a2e;
-  --surface-2: #1f2340;
-  --border: #2b3052;
-  --text: #eceefb;
-  --muted: #a3a9c7;
-  --ring: #818cf8;
+  --bg:       #0f0a1e;
+  --surface:  #1a1230;
+  --surface-2:#231844;
+  --border:   #342660;
+  --text:     #ede9ff;
+  --muted:    #b09dd4;
+  --ring:     #a87df8;
+  --surface-accent: #231844;
 }
 
 html {
