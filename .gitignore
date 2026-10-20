@@ -1,9 +1,26 @@
-node_modules
-.next
-.env
-.env.local
-*.log
-.pgdata
-uploads-private/
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
 next-env.d.ts
-tsconfig.tsbuildinfo
+
+# testing
+coverage/
+playwright-report/
+test-results/
+
+# environment (never commit real secrets)
+.env
+.env.*
+!.env.example
+
+# misc
+.DS_Store
+*.log
+*.tsbuildinfo
+.vercel/
+
+# generated OCR assets (npm run ocr:assets)
+public/ocr/

@@ -1,4 +1,29 @@
-import next from "eslint-config-next";
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
 
-const config = [...next, { ignores: [".next/**", "node_modules/**", "next-env.d.ts"] }];
-export default config;
+export default defineConfig([
+  ...nextVitals,
+  ...nextTs,
+  globalIgnores([
+    ".next/**",
+    "out/**",
+    "build/**",
+    "coverage/**",
+    "playwright-report/**",
+    "test-results/**",
+    "next-env.d.ts",
+    "public/ocr/**",
+  ]),
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+      "no-eval": "error",
+      "no-implied-eval": "error",
+      "no-new-func": "error",
+    },
+  },
+]);

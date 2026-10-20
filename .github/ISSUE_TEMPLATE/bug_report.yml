@@ -1,0 +1,32 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Import … 2. Click … 3. See error"
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Generator in use
+      options: [Offline heuristics, Ollama, Hosted AI, Not applicable]
+  - type: textarea
+    id: extra
+    attributes:
+      label: Console errors or a sample file
+      description: Please do not attach private documents.

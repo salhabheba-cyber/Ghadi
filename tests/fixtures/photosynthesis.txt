@@ -1,0 +1,19 @@
+# Photosynthesis
+
+Photosynthesis is the process by which green plants convert light energy into chemical energy stored in sugars. It takes place mainly in the leaves of plants, inside small structures called chloroplasts.
+
+## Light-dependent reactions
+
+Chlorophyll is a green pigment that absorbs light, mainly in the blue and red wavelengths. When chlorophyll absorbs light, electrons gain energy and travel along a chain of proteins in the thylakoid membrane. This electron transport chain produces ATP and NADPH, which store energy for the next stage. Water molecules are split during this stage, and oxygen is released as a by-product.
+
+In 1779, Jan Ingenhousz showed that light is essential to the process, and that only the green parts of plants release oxygen. For example, a submerged water plant produces visible bubbles of oxygen when placed in bright light.
+
+## The Calvin cycle
+
+The Calvin cycle refers to a series of reactions that build sugars from carbon dioxide using the energy carried by ATP and NADPH. These reactions occur in the stroma of the chloroplast and do not need light directly. Carbon dioxide enters the leaf through stomata, which are tiny pores on the leaf surface that allow gas exchange.
+
+The overall balance can be written as: Glucose = carbon dioxide + water + light energy. Plants use the glucose for growth, and they store extra glucose as starch.
+
+## Factors affecting the rate
+
+Light intensity, carbon dioxide concentration, and temperature all change the rate of photosynthesis. Chlorophyll content also matters, because leaves with less chlorophyll absorb less light. When any one of these factors is in short supply it becomes the limiting factor, and the rate cannot rise until that factor increases. Such as in winter, low temperature often limits the reactions even when light is bright.

@@ -1,0 +1,147 @@
+import { z } from "zod";
+import { safeFetch } from "@/lib/security/safe-fetch";
+import { UrlRejectedError } from "@/lib/security/ssrf";
+import { clientKey, rateLimit } from "@/lib/security/rate-limit";
+import {
+  isJsonRequest,
+  jsonError,
+  jsonOk,
+  readJsonLimited,
+  sameOriginOrNull,
+} from "@/lib/server/http";
+import { decodeBody, extractArticle } from "@/lib/document-processing/html-extract";
+import {
+  YOUTUBE_HOSTS,
+  isYouTubeUrl,
+  parseTranscript,
+  parseYouTubeId,
+  pickCaptionTrack,
+  readPlayerResponse,
+} from "@/lib/document-processing/youtube";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+const bodySchema = z.object({
+  url: z.string().min(1).max(2000),
+  /** Preferred caption language for YouTube imports. */
+  language: z
+    .string()
+    .regex(/^[a-zA-Z-]{2,10}$/)
+    .optional(),
+});
+
+function limits() {
+  const maxBytes = Number(process.env.GHADI_URL_IMPORT_MAX_BYTES);
+  const timeoutMs = Number(process.env.GHADI_URL_IMPORT_TIMEOUT_MS);
+  return {
+    maxBytes:
+      Number.isFinite(maxBytes) && maxBytes > 0 ? Math.min(maxBytes, 10_000_000) : 2_000_000,
+    timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? Math.min(timeoutMs, 30_000) : 10_000,
+  };
+}
+
+/**
+ * Imports a public web article or a YouTube video's accessible captions as plain text.
+ * All fetching goes through safeFetch (scheme/port/host checks, private-IP blocking with connection
+ * pinning, redirect re-validation, size/time limits, content-type allowlist).
+ */
+export async function POST(request: Request) {
+  if (!sameOriginOrNull(request))
+    return jsonError(403, "forbidden", "Cross-site requests are not allowed.");
+  if (!isJsonRequest(request))
+    return jsonError(415, "unsupported-media-type", "Send the request as application/json.");
+
+  const limited = rateLimit(`import:${clientKey(request)}`, 20, 60_000);
+  if (!limited.ok) {
+    return jsonError(429, "rate-limited", "Too many import requests. Please wait a moment.", {
+      "Retry-After": String(limited.retryAfterSec),
+    });
+  }
+
+  const read = await readJsonLimited(request, 4_000);
+  if (!read.ok) return jsonError(read.status, "bad-request", read.message);
+  const parsed = bodySchema.safeParse(read.data);
+  if (!parsed.success)
+    return jsonError(400, "bad-request", 'Send a JSON body like {"url": "https://…"}.');
+
+  const { url, language } = parsed.data;
+  const { maxBytes, timeoutMs } = limits();
+
+  try {
+    if (isYouTubeUrl(url)) {
+      return await importYouTube(url, language ?? "en", { maxBytes, timeoutMs });
+    }
+    const res = await safeFetch(url, { maxBytes, timeoutMs });
+    const isHtml = res.contentType !== "text/plain";
+    const raw = decodeBody(res.body, res.charset, isHtml);
+    const { title, text } = isHtml
+      ? extractArticle(raw)
+      : { title: new URL(res.finalUrl).hostname, text: raw };
+    if (text.trim().length < 50) {
+      return jsonError(
+        422,
+        "no-content",
+        "No readable article text was found on that page. It may need JavaScript or a login.",
+      );
+    }
+    return jsonOk({ kind: "url", title, text, finalUrl: res.finalUrl });
+  } catch (error) {
+    if (error instanceof UrlRejectedError) return jsonError(422, "rejected", error.message);
+    return jsonError(502, "fetch-failed", "The page could not be fetched.");
+  }
+}
+
+async function importYouTube(
+  url: string,
+  language: string,
+  lim: { maxBytes: number; timeoutMs: number },
+) {
+  const id = parseYouTubeId(url);
+  if (!id) return jsonError(422, "rejected", "That does not look like a YouTube video address.");
+
+  const page = await safeFetch(`https://www.youtube.com/watch?v=${id}`, {
+    ...lim,
+    allowedHosts: YOUTUBE_HOSTS,
+    maxBytes: Math.max(lim.maxBytes, 3_000_000),
+    headers: { "Accept-Language": "en-US,en;q=0.8" },
+  });
+  const { title, tracks } = readPlayerResponse(decodeBody(page.body, page.charset, true));
+  const track = pickCaptionTrack(tracks, language);
+  if (!track) {
+    return jsonError(
+      422,
+      "no-captions",
+      "This video has no accessible captions, so it cannot be imported. Ghadi does not transcribe audio. You can paste a transcript instead.",
+    );
+  }
+  const captionUrl = new URL(track.baseUrl);
+  captionUrl.searchParams.set("fmt", "json3");
+  const cap = await safeFetch(captionUrl.toString(), {
+    ...lim,
+    allowedHosts: YOUTUBE_HOSTS,
+    allowedContentTypes: [
+      "application/json",
+      "text/xml",
+      "application/xml",
+      "text/plain",
+      "text/html",
+    ],
+  });
+  const text = parseTranscript(decodeBody(cap.body, cap.charset));
+  if (text.trim().length < 30) {
+    return jsonError(
+      422,
+      "no-captions",
+      "The caption track was empty, so nothing could be imported.",
+    );
+  }
+  return jsonOk({
+    kind: "youtube",
+    title: title ?? `YouTube video ${id}`,
+    text,
+    finalUrl: `https://www.youtube.com/watch?v=${id}`,
+    captionLanguage: track.languageCode,
+    autoGenerated: track.auto,
+  });
+}

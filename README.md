@@ -1,95 +1,180 @@
-# GHADI — Learn today. Grow for tomorrow.
+# Ghadi
 
-An early, **supervised pilot slice** of a multilingual teaching platform. It targets ages 3–5 first (colours, shapes, counting, first sounds) with parent-managed accounts. The tagline is provisional.
+**Learn Smarter. Remember More. Stay Free.**
 
-> **Read this first.** Unless you configure and test an LLM key, the teacher is a **fixed script, not an AI model**, and every lesson screen says which. Payments are **not connected** (the 7-day trial and US$5/month rules exist, but nobody can pay yet). Speech recognition, realistic avatar and reminders are not built. French and Arabic are unreviewed drafts. Privacy/terms pages are drafts awaiting legal review; no legal compliance is claimed. See [`docs/STATUS.md`](docs/STATUS.md) for the full, honest picture.
->
-> Teacher video clips (lip-synced to exact sentences) are supported but none exist yet: see [`docs/TEACHER_CLIPS.md`](docs/TEACHER_CLIPS.md).
->
-> Staff: grant a content role with `pnpm user:role you@example.com admin`, then open `/en/admin`.
+Ghadi is a free, open-source, **local-first** study platform. Import your own documents and turn them into structured study notes, quizzes and spaced-repetition flashcards. No account, no subscription, and by default nothing leaves your device.
 
-## What works today
-- Parent sign-up / sign-in (Better Auth, DB sessions, HttpOnly cookies), child profiles with a nickname and age band only, consent records, JSON export, delete learning history, delete profile.
-- A curriculum catalogue with source, license, jurisdiction, language, age range, versioning and an honest *alignment note*. Only **approved** content is served. Six original sample lessons are seeded (4 English approved; French and Arabic counting drafts are `in_review` and not shown to children).
-- An interactive lesson with an explicit state machine (introduction → explanation → guided practice → independent attempt → correction → recap → completion), deterministic grading, hints in guided practice only, and answers never sent to the browser before an attempt.
-- Append-only skill evidence and an evidence-based estimate per skill (never set by "session ended"); parents see limits and can clear a skill's record.
-- EN / FR / AR UI with `lang`/`dir` handling (FR/AR are drafts), teacher photo (still image, no animation or lip-sync), browser text-to-speech when the device offers it, gentle break reminder, no streaks.
+> **Honesty note.** Out of the box Ghadi does **not** use an AI model. It uses deterministic, rule-based text analysis ("offline heuristics") and labels everything it makes that way. Real AI is optional and opt-in: a model running on your own computer (Ollama) or a provider you configure on the server. See [AI modes](#6-ai-modes).
 
-## Quick start
-Requirements: Node 22, pnpm 10, PostgreSQL 16 reachable locally.
+---
+
+## 1. Overview
+
+Ghadi runs as a Next.js app. All your data lives in your browser's IndexedDB. The server exists only for two optional features (importing a web page / YouTube captions, and the optional hosted-AI route); everything else works with no server round-trips.
+
+## 2. Features
+
+- **Import** PDF, DOCX, PPTX, TXT, Markdown, images (OCR, opt-in), pasted text, web pages and YouTube videos that have published captions.
+- **Study notes**: overview, summary, key concepts, definitions, dates and formulas, examples, related ideas and a review checklist. Each item is tagged _from your text_ or _model-written_. Editable, duplicable, exportable to Markdown, printable.
+- **Quizzes**: multiple choice, true/false, short answer and fill-in-the-blank; difficulty and question-type options; one question at a time; feedback after each question or at the end; scoring, explanations, review of missed questions, retry, and attempt history.
+- **Flashcards** with a transparent SM-2-inspired scheduler (Known / Difficult / Forgotten), keyboard-driven review (Space to flip, 1/2/3 to rate), manual cards and generated decks.
+- **Dashboard** computed only from your real activity: streak, quiz accuracy, due and mature cards, upcoming reviews, review history, quiz scores over time. Empty states instead of fake numbers.
+- **Library**: search, sort, filter by type/collection/tag, collections, tags, bulk delete.
+- **Backup & restore** (versioned JSON, validated before anything is touched), Markdown / CSV export, print styles.
+- Light and dark themes, responsive layout, keyboard accessible, automatically scanned with axe (WCAG 2 A/AA) in CI.
+
+## 3. Screens
+
+Landing page · Dashboard · My Library · Documents (import) · Study Notes · Quizzes · Flashcards · Review · Settings.
+
+## 4. Quick start
+
+Requirements: **Node.js ≥ 22.13** and npm.
 
 ```bash
-pnpm install
-cp .env.example .env        # then edit BETTER_AUTH_SECRET at least
-createdb ghadi_dev && createdb ghadi_test   # or any two empty databases; test DB name must end in _test
-pnpm db:migrate             # applies migrations/*.sql (idempotent)
-pnpm db:seed                # original sample lessons (idempotent)
-pnpm dev                    # http://localhost:3000
+git clone https://github.com/salhabheba-cyber/Ghadi.git
+cd ghadi-ai
+npm install
+npm run dev          # http://localhost:3000
 ```
-With `GHADI_ENABLE_DEMO_ENTRY=true` (dev only) the landing page has a **Try the demo** button that creates a throwaway parent. Then: *Add a child → tick the two consent boxes → Start learning*.
 
-### No Postgres service handy?
-This is how the project was developed in a sandbox without Docker (as a non-root user):
+Production:
+
 ```bash
-PGBIN=$(ls -d /usr/lib/postgresql/*/bin | head -1)
-$PGBIN/initdb -D .pgdata -U ghadi --auth=trust -E UTF8
-$PGBIN/pg_ctl -D .pgdata -o "-k /tmp -p 5432 -c listen_addresses=127.0.0.1" -l .pgdata/server.log -w start
-psql -h 127.0.0.1 -U ghadi -d postgres -c "create database ghadi_dev" -c "create database ghadi_test"
+npm run build
+npm start
 ```
-(`--auth=trust` is for local development only.)
 
-## Checks
-```bash
-pnpm lint        # eslint
-pnpm typecheck   # tsc --noEmit
-pnpm test        # vitest; needs TEST_DATABASE_URL (resets that DB's schema on every run)
-pnpm build       # next build
-pnpm start       # in one terminal, then in another:
-pnpm smoke       # HTTP end-to-end checks against the running server (needs DATABASE_URL)
+No environment variables are required.
+
+## 5. Tech stack
+
+Next.js (App Router) · React 19 · strict TypeScript · Tailwind CSS 4 (own accessible primitives) · Lucide icons · Dexie / IndexedDB · Zod · PDF.js · Mammoth · JSZip (PPTX) · tesseract.js (optional OCR) · Vitest + React Testing Library · Playwright + axe-core · ESLint · Prettier.
+
+## 6. AI modes
+
+| Mode                   | Default | What runs                                                                                                      | Where your text goes                                                             |
+| ---------------------- | ------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| **Offline heuristics** | yes     | Deterministic rule-based extraction (keyword ranking, definition patterns, seeded shuffling). **No AI model.** | Nowhere. Stays in your browser.                                                  |
+| **Ollama**             | no      | A model **you** installed in Ollama, called from your browser.                                                 | Only to your own machine (e.g. `localhost:11434`).                               |
+| **Hosted AI**          | no      | An OpenAI-compatible provider configured **server-side** by whoever runs Ghadi.                                | To that provider, through Ghadi's server, **only after you tick a consent box**. |
+
+Every note, quiz and deck records its origin (_Offline heuristics_, _Local AI_, _Hosted AI_, _Written by you_) and shows it in the UI. If a chosen AI provider fails, Ghadi falls back to offline heuristics **and tells you** it did.
+
+### Ollama setup
+
+1. Install [Ollama](https://ollama.com) and pull a model yourself, for example `ollama pull llama3.2`. Ghadi never downloads models.
+2. Allow the browser origin: `OLLAMA_ORIGINS=http://localhost:3000 ollama serve`.
+3. In **Settings → Generator** choose _Ollama_, enter the model name and press **Test connection**.
+
+### Hosted AI setup (optional, server operators)
+
+Copy `.env.example` to `.env.local` and set the four `GHADI_HOSTED_AI_*` variables. Keys are read only on the server and are never sent to the browser. The server builds its own prompts, caps input size, rate-limits requests (10/min per client), and validates the model's JSON output. It is **not** an open LLM proxy. See [docs/PRIVACY.md](docs/PRIVACY.md).
+
+## 7. Importing documents
+
+| Source         | Limit                  | Notes                                                      |
+| -------------- | ---------------------- | ---------------------------------------------------------- |
+| TXT / Markdown | 5 MB                   | UTF-8, UTF-16 (BOM) and Windows-1252 fallback              |
+| PDF            | 50 MB, first 500 pages | Text layer only; scans need OCR                            |
+| DOCX           | 25 MB                  | Text, headings, lists                                      |
+| PPTX           | 50 MB                  | Slide text and speaker notes                               |
+| Images         | 15 MB                  | Needs OCR                                                  |
+| Web page       | 2 MB (configurable)    | Fetched by the server (see Security)                       |
+| YouTube        | –                      | Published caption tracks only. **No audio transcription.** |
+
+Files are checked by extension **and** file signature before parsing. Legacy `.doc` / `.ppt` are rejected with an instruction to re-save in the modern format.
+
+**OCR is opt-in and English OCR is fully local.** The tesseract.js engine and English language data ship with Ghadi (`npm run ocr:assets` copies them into `public/ocr`; it runs automatically before `dev` and `build`). Other languages download their data file once from `cdn.jsdelivr.net`, and only after Ghadi asks you. Your file is never uploaded.
+
+## 8. Study material generation
+
+The offline generator extracts what is literally in your text: ranked keywords, sentences that match definition patterns ("X is …", "X refers to …", "X, which is …"), dates, formulas and "for example" sentences. Quizzes are built from those, with distractors drawn from other terms in your document. It cannot reason, paraphrase or translate. If a document is too short to support the number of items you asked for, you get fewer items and a notice, not padded filler.
+
+## 9. Spaced repetition
+
+Ratings map to an SM-2-style schedule: _Known_ grows the interval, _Difficult_ grows it slowly and lowers ease, _Forgotten_ resets the interval to 0 (the card stays due and is requeued in the same session). Due dates are local midnights computed with calendar arithmetic, so daylight-saving changes cannot shift them. See `src/lib/study/srs.ts` and its tests.
+
+## 10. Data, backup and privacy
+
+Everything is in IndexedDB. Clearing site data erases it, so use **Settings → Download full backup**. Restores validate the whole file with Zod first and run in a single transaction that rolls back on failure. Backups are versioned (`schemaVersion`). Details: [docs/PRIVACY.md](docs/PRIVACY.md).
+
+## 11. Security
+
+SSRF-hardened URL import; strict input validation; a per-request nonce Content-Security-Policy with no `unsafe-inline` or `unsafe-eval` scripts; CSRF defences (Sec-Fetch-Site, Origin and JSON-only bodies); proxy-aware rate limiting; extra isolation headers (COOP/CORP, HSTS, Permissions-Policy); no secrets in the browser; CodeQL, dependency review, `npm audit` and secret scanning in CI. Policy and limitations: [SECURITY.md](SECURITY.md). Design analysis: [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md).
+
+## 12. Accessibility
+
+Semantic landmarks, skip link, visible focus, labelled controls, keyboard-operable dialogs with focus trapping, `aria-live` status messages, reduced-motion support, light/dark themes tested for contrast. The Playwright suite runs axe-core (WCAG 2 A/AA) over every page in both themes.
+
+## 13. Project structure
+
 ```
-`pnpm smoke` submits the real forms and API as two different parents, plays a whole lesson, exercises export/deletion and cleans up after itself. It does **not** use a browser.
-
-## Layout
+src/app/            Next.js routes: landing, (app)/* screens, api/* routes
+src/components/     UI primitives, layout, feature components
+src/lib/
+  validation/       Zod schemas (source of truth for types)
+  storage/          Dexie database, repository, backup/restore
+  study/            heuristic generators, quiz engine, SRS scheduler
+  ai/               provider abstraction, Ollama, hosted client, fallback
+  document-processing/  extractors, OCR, HTML + YouTube parsing
+  security/         SSRF guard, safe fetch, rate limiter
+tests/              unit, component (RTL) and e2e (Playwright)
+docs/               architecture, roadmap, deployment, privacy, publishing
 ```
-migrations/      plain SQL, applied in order by scripts/migrate.ts
-src/lib/schemas.ts           Zod schemas: activities, lesson content, teacher turn, answers, consent
-src/lib/teaching/            state machine, grading, mastery, demo teacher, phrases
-src/lib/providers/types.ts   LLM / STT / TTS / OCR / avatar interfaces (only demo + browser TTS exist)
-src/lib/repo/                data access; every query is scoped to the guardian in SQL
-src/app/[locale]/            pages + server actions;  src/app/api/  JSON API (origin check, auth, rate limit)
-tests/ docs/ scripts/
-```
-Architecture, trade-offs and the module-by-module status are in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Pre-launch requirements are in [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md).
 
-## Providers and credentials
-| Capability | Today | To enable a real one |
-|---|---|---|
-| Teacher / LLM | `demo` scripted teacher (labelled) | Implement `TeacherProvider`, validate output with `TeacherTurn`, add safety evaluation |
-| Text-to-speech | Browser `speechSynthesis` if present (untested on real devices) | Implement `TextToSpeechProvider` |
-| Speech-to-text, OCR, avatar | Not implemented | Implement the interfaces in `src/lib/providers/types.ts` |
-| Billing | Not implemented | Needs confirmed region, credentials and compliance |
+More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## Deployment (documented, not yet exercised)
-Node 22 + PostgreSQL 16. Set `DATABASE_URL`, `BETTER_AUTH_SECRET`, `BETTER_AUTH_URL`, `NODE_ENV=production`; run `pnpm db:migrate`; `pnpm build && pnpm start`. Put it behind TLS. Production deployment has **not** been tried; work through `docs/RELEASE_CHECKLIST.md` first.
+## 14. Scripts
 
+| Command                           | Purpose                                     |
+| --------------------------------- | ------------------------------------------- |
+| `npm run dev`                     | Development server                          |
+| `npm run build` / `npm start`     | Production build / server                   |
+| `npm run lint`                    | ESLint                                      |
+| `npm run typecheck`               | `tsc --noEmit`                              |
+| `npm run format` / `format:check` | Prettier                                    |
+| `npm test`                        | Unit and component tests (Vitest)           |
+| `npm run test:e2e`                | Playwright end-to-end + accessibility tests |
+| `npm run check`                   | lint + typecheck + unit tests + build       |
 
-## Install as an app (PWA)
+If your environment already has a Chromium build, point Playwright at it with `PW_CHROMIUM_PATH=/path/to/chrome npm run test:e2e`; otherwise run `npx playwright install chromium` once.
 
-GHADI is a web platform that can also be installed like an app, with no app-store step:
-open it in Chrome/Edge (Android, desktop) or Safari (iPad/iPhone: Share → Add to Home Screen) and choose *Install*.
-It then opens full-screen with the GHADI icon. Tablet is the primary target for student sessions.
+## 15. Testing
 
-- Manifest: `src/app/manifest.ts`; icons: `public/icons/`.
-- Service worker (`public/sw.js`) is registered in production builds only and caches **just** a static offline page.
-  Pages and API responses are never cached, so no child or parent data is stored by the service worker.
-- Not done: app-store packages (a Capacitor/TWA wrapper would be the next step), offline lessons, push notifications.
-- Install prompts need HTTPS (or localhost). Verified here: manifest, icons and service-worker files are served and linked;
-  actual install on a real device has **not** been tested.
+Unit tests cover scheduling, grading, generation, storage, backup, validation, AI provider handling (with a fake `fetch`), HTML/YouTube parsing, PPTX extraction, SSRF and the rate limiter. Component tests cover dialogs, the quiz player/results and the flashcard session. Playwright drives the real built app through import → notes → quiz → flashcards → reload → backup → wipe → restore, with no AI configuration, plus axe accessibility scans.
 
+## 16. Deployment
 
-## Sign-in, free trial and subscription
+Ghadi needs a Node.js server (Vercel, a container, any Node host) because of its two API routes. Static export is **not** supported. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-- **Sign in with email + password, or with a mobile number** (6-digit SMS code, E.164 numbers such as +961 70 123 456; the first successful code creates the account). Mobile sign-in needs an SMS provider: set `SMS_PROVIDER` (see `.env.example`). Without one the page says it is unavailable. The `console` provider (dev only) prints codes to the server log and is refused in production.
-- **Plan:** every new parent gets a 7-day free trial, then US$5 per month (`plans` table, migration 005). Access is decided server-side from dates (`src/lib/billing/entitlement.ts`) and enforced before any lesson starts or continues; an expired trial blocks lessons but never blocks viewing, exporting or deleting family data.
-- **Payments are NOT connected.** No provider adapter exists, so nobody can subscribe yet; `recordPayment` is the function a verified provider webhook will call. Choose the provider first: availability depends on where the business is registered (check Stripe/Paddle/Lemon Squeezy/local options for Lebanon before building).
-- **Known gaps:** one trial per account means a person can create several accounts (phone verification helps; add device/payment-method checks later); SMS delivery to Lebanese numbers, cost and sender registration are unverified; SMS pumping fraud is mitigated only by in-memory per-number/per-IP limits.
+## 17. Configuration
+
+All environment variables are optional and server-side. See [.env.example](.env.example).
+
+## 18. Known limitations
+
+- Offline generation is rule-based and shallow. Quizzes can contain awkward questions; always check against your source.
+- Offline generation cannot translate; non-English _output_ requires an AI model. Text in other scripts (including right-to-left) is displayed correctly, but keyword extraction works best on space-separated languages.
+- Scanned PDFs and images need OCR. English OCR is bundled and local; other languages download data once, after you agree. OCR is slow on large files (capped at 30 PDF pages).
+- YouTube import depends on a public, undocumented page structure and may break without notice. Videos without captions are refused.
+- Data lives in one browser profile. There is no sync; use backups to move between devices.
+- The rate limiter is in-memory and per server instance.
+- Ollama, YouTube/URL import against live sites, OCR and hosted-AI providers were verified with fakes and local test servers, not against the real services, in the environment where this was built. Please report problems.
+- `npm audit` reports findings; see [SECURITY.md](SECURITY.md).
+
+## 19. Roadmap
+
+See [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## 20. Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) and the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## 21. Publishing to GitHub
+
+See [docs/PUBLISHING.md](docs/PUBLISHING.md) for step-by-step commands. This repository has not been pushed anywhere by the tooling that generated it.
+
+## 22. License
+
+[MIT](LICENSE) © 2026 Ghadi contributors. Ghadi is an independent project with its own code, design and branding.

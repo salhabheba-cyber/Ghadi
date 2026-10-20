@@ -1,54 +1,55 @@
-# GHADI — architecture & MVP scope (Phase 1)
+# Architecture
 
-Status legend: DONE = implemented and tested, STUB = interface only, TODO = not started.
+## Principles
 
-## Starting state
-Empty working directory, no repository. Node 22, pnpm, Python 3.13, uv, Postgres 16 binaries,
-Tesseract 5.3 installed. No Docker daemon, no provider credentials. A local Postgres cluster is
-started from `.pgdata` (see README).
+1. **Local-first.** The browser is the system of record (IndexedDB). The server is optional and stateless.
+2. **One source of truth for data shapes.** Zod schemas (`src/lib/validation/schemas.ts`) define the TypeScript types _and_ validate everything that crosses a trust boundary: records before they are written, backups before restore, model output before use, API request bodies.
+3. **Honest provenance.** Every note, quiz and deck carries an `origin` (`manual | heuristic | local-ai | hosted-ai`); note items also carry `provenance` (`extracted | generated | user`).
+4. **Pure core, thin UI.** Grading, scheduling, generation and statistics are pure functions with unit tests. Components call them through a few orchestration helpers.
 
-## Decisions and trade-offs
-| Area | Choice | Why / deviation from baseline |
-|---|---|---|
-| App | Next.js (App Router) + TypeScript, **unified backend** via route handlers/server code | Baseline suggested FastAPI. For this slice nothing needs Python (OCR/doc ingestion are later). One deployable, one test runner. OCR/ingestion will be a separate Python worker behind the `OcrProvider` interface when Phase 5 starts. |
-| DB | PostgreSQL, plain SQL migrations (`migrations/`), `pg` | Explicit, reviewable SQL; no ORM magic over authorization. |
-| Auth | Better Auth (email+password, DB sessions, HttpOnly cookies) | Established library instead of hand-rolled sessions. |
-| AuthZ | Server-side only: every child/lesson query is scoped by `guardian_id` in SQL | Never trust the client; covered by tenant-isolation tests. |
-| Validation | Zod at every boundary, including model output | Teacher output is validated before it reaches the UI. |
-| i18n | Locale path segment (`/en`, `/fr`, `/ar`), `dir` set per locale | UI strings are drafts; Arabic/French need native review before any claim of support. |
-| Providers | `LlmProvider`, `SpeechToText`, `TextToSpeech`, `AvatarProvider`, `OcrProvider` interfaces | Only the deterministic **demo** teacher, browser speech (feature-detected) and a still teacher photo exist now. |
+## Layers
 
-## Modules (12) and status
-1. Identity & profiles — parent signup/signin, child profiles, consent record: DONE (this slice)
-2. Curriculum catalog & versioning — schema + original seed lessons with license metadata: DONE
-3. Lesson delivery & activity renderer — DONE for two activity kinds: `choice` (tap) and `count`. No matching, tracing, drawing or voice activities yet
-4. Teaching orchestrator — explicit state machine + schemas + demo teacher: DONE
-5. Speech & avatar adapters — interfaces + browser text-to-speech (feature-detected; NOT verified on real devices) + still teacher photo with an AI badge (no animation, no lip-sync). No speech-to-text and no microphone use at all: PARTIAL
-6. Upload/OCR/validation — DONE locally (Tesseract via `OCR_PROVIDER=tesseract`; review before use; EN tested only)
-7. Assessments & grading — deterministic grading of the two activity kinds; no generated assessments or multiple formats yet: PARTIAL
-8. Progress & spaced review — evidence + mastery estimate + rule-based review suggestions (`recommend.ts`): DONE
-9. Agenda & scheduling — DONE for explicit-date extraction + parent confirmation; no reminders
-10. Parent reports — printable report with reasoned recommendations and limits: DONE; no notifications
-11. Subscription entitlements — DONE (7-day trial, US$5/month, server-side gate); payments NOT connected
-12. Safety/consent/audit/retention/deletion — consent records, audit log, export, delete learning data / delete profile, orphan cleanup. No automated retention schedule, no child-mode lock: PARTIAL
+```
+UI (src/app, src/components)
+   │  hooks: useLive (Dexie liveQuery), useSettings
+   ▼
+Orchestration (src/lib/actions.ts)  ── read settings → run provider (with fallback) → validate → save
+   ▼
+Providers (src/lib/ai)              ── StudyProvider interface
+   │     OfflineProvider → study/heuristic.ts (deterministic)
+   │     LlmProvider(CompleteFn) → Ollama client | Hosted client → /api/ai/generate
+   ▼
+Core logic (src/lib/study)          ── srs, quiz-engine, text, build
+Storage (src/lib/storage)           ── db (Dexie), repo (validated writes), backup
+Security (src/lib/security)         ── ssrf, safe-fetch, rate-limit (server only)
+```
 
-## Teaching state machine
-`introduction → explanation → guided_practice → independent_attempt → (correction ↺) → recap → completion`
-Transitions are computed in code (`src/lib/teaching/machine.ts`), not chosen by a model.
-Mastery is never set by session end; it is derived from stored attempt evidence only.
+## Provider abstraction
 
-## Page map
-`/[locale]` landing · `/[locale]/sign-up` · `/[locale]/sign-in` · `/[locale]/parent` dashboard ·
-`/[locale]/parent/children/new` · `/[locale]/parent/children/[id]` (progress, delete) ·
-`/[locale]/learn/[childId]` student home · `/[locale]/learn/[childId]/lesson/[lessonId]` session.
-Also: `/[locale]/learn/[childId]/dictation|reading[/textId]` · `/[locale]/parent/uploads[/id]` · `/[locale]/parent/agenda` ·
-`/[locale]/parent/children/[id]/report` · `/[locale]/parent/billing` · `/[locale]/admin` (staff only) ·
-`/[locale]/privacy` and `/terms` (drafts) · `/[locale]/forgot-password`, `reset-password`.
+`StudyProvider` exposes `generateStudyNotes`, `generateQuiz`, `generateFlashcards`, `explainAnswer`, `summarizeContent`. `LlmProvider` implements all of them once on top of a `CompleteFn({task, payload})`, so Ollama and hosted AI differ only in transport. Prompts and output schemas live in `ai/tasks.ts`: untrusted document text is delimited and labelled as data, JSON is extracted and validated with Zod, and one retry is attempted on invalid output.
 
-## Provider selection (env)
-`SMS_PROVIDER`, `MAIL_PROVIDER`, `OCR_PROVIDER`, `LLM_PROVIDER` choose adapters; unset means "unavailable" and the UI says so.
-Console SMS/mail are dev-only and refused when `NODE_ENV=production`.
+`generateWithFallback` runs the chosen provider; on any failure except user cancellation it runs the offline generator and adds a notice explaining what happened. UI never shows offline output as model output.
 
-## AI teacher boundary
-The LLM sees only short non-identifying event data (first name, correctness verdict from deterministic grading, lesson title).
-Lesson explanations, questions, hints and corrections are shown verbatim from approved content. Uploads/OCR text never reach it.
+## Data model (IndexedDB tables)
+
+`documents · notes · quizzes · attempts · decks · cards · reviews · collections · settings`. Deleting a document keeps derived material but unlinks it; deleting a quiz or deck cascades to its attempts or cards and review logs, inside a transaction. Reviews are written together with the card's new schedule in one transaction.
+
+## Document processing
+
+`validateFile` (extension + magic bytes + size) → extractor per format (all in-browser) → `normalizeText` → `StudyDocument`. PDFs with almost no text are reported as `needs-ocr` and are not stored until the user opts into OCR. English OCR runs in a same-origin web worker with bundled WebAssembly. URL/YouTube import goes through the server route because browsers cannot fetch cross-origin pages; the server returns plain text only.
+
+## Server routes
+
+`runtime = "nodejs"`, `dynamic = "force-dynamic"`. Because of these routes the app cannot be statically exported.
+
+- `GET /api/ai/status` – `{ configured, model? }`
+- `POST /api/ai/generate` – consent + rate limit + server-built prompt + validated output
+- `POST /api/import/url` – SSRF-safe fetch → article extraction or YouTube captions
+
+## Spaced repetition
+
+`applyRating(schedule, rating, now)` implements: _forgotten_ → interval 0, repetitions reset, ease −0.2 (min 1.3), lapse +1; _difficult_ → interval ×1.2 (1 day for a new card), ease −0.15; _known_ → 1 day, then 6 days, then interval × ease, ease +0.1. Due dates are local midnights from calendar arithmetic. Behaviour is pinned by `tests/unit/srs.test.ts`.
+
+## Testing strategy
+
+Vitest (jsdom + fake-indexeddb) for logic and components; Playwright against the production build for flows and axe accessibility scans. Network-dependent code is tested with fake `fetch` implementations or local `http` servers.
