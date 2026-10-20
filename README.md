@@ -33,7 +33,7 @@ Requirements: **Node.js ≥ 22.13** and npm.
 
 ```bash
 git clone https://github.com/salhabheba-cyber/Ghadi.git
-cd ghadi-ai
+cd Ghadi
 npm install
 npm run dev          # http://localhost:3000
 ```

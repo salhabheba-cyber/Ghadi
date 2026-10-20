@@ -13,7 +13,7 @@ Thank you for helping! Ghadi is a free, open-source study tool and welcomes cont
 
 ```bash
 git clone https://github.com/salhabheba-cyber/Ghadi.git
-cd ghadi-ai
+cd Ghadi
 npm install          # Node >= 22.13
 npm run dev
 ```
