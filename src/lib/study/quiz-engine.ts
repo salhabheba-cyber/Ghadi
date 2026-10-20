@@ -63,17 +63,29 @@ export interface ScoreResult {
   answers: AttemptAnswer[];
 }
 
+/** AI check results keyed by question ID — when present, they override local grading. */
+export interface AiCheckMap {
+  [questionId: string]: { loading: boolean; result: { correct: boolean } | null; error: string | null } | undefined;
+}
+
 export function scoreQuiz(
   quiz: Pick<Quiz, "questions">,
   responses: Record<string, string | undefined>,
+  aiChecks?: AiCheckMap,
 ): ScoreResult {
   const answers: AttemptAnswer[] = quiz.questions.map((q) => {
     const response = responses[q.id];
     const skipped = response === undefined || normalizeAnswer(response) === "";
+
+    // If an AI result exists for this question, use it; otherwise fall back to local grading.
+    const aiEntry = aiChecks?.[q.id];
+    const correct =
+      aiEntry?.result != null ? aiEntry.result.correct : gradeResponse(q, response);
+
     return {
       questionId: q.id,
       response: response ?? "",
-      correct: gradeResponse(q, response),
+      correct,
       skipped,
     };
   });

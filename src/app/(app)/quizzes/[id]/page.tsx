@@ -1,5 +1,5 @@
 "use client";
-import { ArrowLeft, Copy, Download, Play, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Download, FileText, Loader2, Play, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
@@ -25,7 +25,49 @@ import { errorMessage, formatDateTime } from "@/lib/utils";
 import type { Quiz, QuizAttempt } from "@/lib/validation/schemas";
 
 type View =
-  { name: "overview" } | { name: "play"; quiz: Quiz } | { name: "results"; attempt: QuizAttempt };
+  | { name: "overview" }
+  | { name: "play"; quiz: Quiz }
+  | { name: "results"; attempt: QuizAttempt };
+
+type Lang = "en" | "fr" | "ar";
+
+/** Download quiz as a Word (.docx) file via the export API */
+async function downloadDocx(quiz: Quiz, includeAnswers: boolean): Promise<void> {
+  const body = {
+    title: quiz.title,
+    subject: undefined as string | undefined,
+    questions: quiz.questions.map((q) => ({
+      type: q.type,
+      prompt: q.prompt,
+      options: q.options ?? undefined,
+      correct: q.correct,
+      explanation: q.explanation ?? undefined,
+    })),
+    includeAnswers,
+    format: "docx" as const,
+  };
+
+  const res = await fetch("/api/quiz/export", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { message?: string }).message ?? `Export failed (HTTP ${res.status})`);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${safeFileName(quiz.title, "docx")}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 export default function QuizPage() {
   const { id } = useParams<{ id: string }>();
@@ -39,7 +81,10 @@ export default function QuizPage() {
   );
   const [view, setView] = useState<View>({ name: "overview" });
   const [feedback, setFeedback] = useState<"immediate" | "end">("immediate");
+  const [aiCheck, setAiCheck] = useState(true);
+  const [lang, setLang] = useState<Lang>("en");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [exporting, setExporting] = useState<"student" | "answers" | null>(null);
 
   if (loading) return <p className="text-sm text-[var(--muted)]">Loading…</p>;
   if (!quiz)
@@ -56,6 +101,8 @@ export default function QuizPage() {
       </EmptyState>
     );
 
+  const hasFillQuestions = quiz.questions.some((q) => q.type === "fill" || q.type === "short");
+
   async function finish(attempt: QuizAttempt) {
     setView({ name: "results", attempt });
     try {
@@ -66,16 +113,33 @@ export default function QuizPage() {
     }
   }
 
+  async function handleExport(includeAnswers: boolean) {
+    if (!quiz) return;
+    const key = includeAnswers ? "answers" : "student";
+    setExporting(key);
+    try {
+      await downloadDocx(quiz, includeAnswers);
+      toast("Word file downloaded.", "good");
+    } catch (e) {
+      toast(errorMessage(e), "error");
+    } finally {
+      setExporting(null);
+    }
+  }
+
   if (view.name === "play") {
     return (
       <QuizPlayer
         quiz={view.quiz}
         feedbackMode={feedback}
+        aiCheckEnabled={aiCheck}
+        lang={lang}
         onFinish={(a) => void finish(a)}
         onExit={() => setView({ name: "overview" })}
       />
     );
   }
+
   if (view.name === "results") {
     return (
       <>
@@ -164,39 +228,124 @@ export default function QuizPage() {
             </Link>
           ) : null}
         </p>
+
         {quiz.origin === "heuristic" ? (
           <Notice tone="info">
             These questions were built by rule-based text analysis, not an AI model. Some may be
             imperfect: check them against your source.
           </Notice>
         ) : null}
-        <Card className="space-y-3">
-          <fieldset>
-            <legend className="mb-2 font-semibold">Feedback</legend>
-            <label className="mr-4 inline-flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="fb"
-                checked={feedback === "immediate"}
-                onChange={() => setFeedback("immediate")}
-              />{" "}
-              After each question
-            </label>
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="radio"
-                name="fb"
-                checked={feedback === "end"}
-                onChange={() => setFeedback("end")}
-              />{" "}
-              At the end
-            </label>
-          </fieldset>
+
+        {/* ── Play options ── */}
+        <Card className="space-y-4">
+          <div className="space-y-3">
+            {/* Feedback mode */}
+            <fieldset>
+              <legend className="mb-2 font-semibold">Feedback</legend>
+              <label className="mr-4 inline-flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="fb"
+                  checked={feedback === "immediate"}
+                  onChange={() => setFeedback("immediate")}
+                />{" "}
+                After each question
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm">
+                <input
+                  type="radio"
+                  name="fb"
+                  checked={feedback === "end"}
+                  onChange={() => setFeedback("end")}
+                />{" "}
+                At the end
+              </label>
+            </fieldset>
+
+            {/* AI check (only shown when quiz has fill/short questions) */}
+            {hasFillQuestions ? (
+              <div className="space-y-2 rounded-lg bg-[var(--surface-2)] p-3">
+                <label className="flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={aiCheck}
+                    onChange={(e) => setAiCheck(e.target.checked)}
+                    className="accent-brand-600"
+                  />
+                  <Sparkles className="h-4 w-4 text-brand-500" aria-hidden />
+                  Use Ghadi AI to check fill-in-blank answers
+                </label>
+                {aiCheck ? (
+                  <p className="text-xs text-[var(--muted)]">
+                    Synonyms and paraphrases are accepted. Requires AI to be configured on this
+                    server.
+                  </p>
+                ) : null}
+                {aiCheck ? (
+                  <fieldset>
+                    <legend className="mb-1 text-xs font-medium text-[var(--muted)]">
+                      Feedback language
+                    </legend>
+                    <div className="flex gap-3">
+                      {(["en", "fr", "ar"] as Lang[]).map((l) => (
+                        <label key={l} className="flex items-center gap-1.5 text-sm">
+                          <input
+                            type="radio"
+                            name="lang"
+                            checked={lang === l}
+                            onChange={() => setLang(l)}
+                            className="accent-brand-600"
+                          />
+                          {l === "en" ? "English" : l === "fr" ? "Français" : "العربية"}
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
           <Button size="lg" onClick={() => setView({ name: "play", quiz })}>
             <Play className="h-4 w-4" aria-hidden /> Start quiz
           </Button>
         </Card>
 
+        {/* ── Export ── */}
+        <Card className="space-y-3">
+          <h2 className="font-semibold">Export quiz</h2>
+          <p className="text-sm text-[var(--muted)]">
+            Download a Word (.docx) file for printing or sharing.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              disabled={exporting !== null}
+              onClick={() => void handleExport(false)}
+            >
+              {exporting === "student" ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <FileText className="h-4 w-4" aria-hidden />
+              )}
+              Student sheet (no answers)
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={exporting !== null}
+              onClick={() => void handleExport(true)}
+            >
+              {exporting === "answers" ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              ) : (
+                <FileText className="h-4 w-4" aria-hidden />
+              )}
+              Answer key
+            </Button>
+          </div>
+        </Card>
+
+        {/* ── Attempt history ── */}
         <section>
           <h2 className="mb-2 text-lg font-semibold">Attempt history</h2>
           {attempts && attempts.length > 0 ? (
