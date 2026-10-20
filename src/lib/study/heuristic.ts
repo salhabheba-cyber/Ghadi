@@ -14,6 +14,7 @@ import {
   rankSentences,
   splitSections,
   tokenize,
+  validateSourceQuality,
   type ScoredTerm,
 } from "./text";
 
@@ -46,6 +47,28 @@ function singleWordKeywords(keywords: ScoredTerm[]): ScoredTerm[] {
 
 export function generateNotesHeuristic(title: string, rawText: string): NoteDraft {
   const notices: string[] = [HEURISTIC_NOTICE];
+
+  // Pre-generation quality gate: refuse to generate from garbled or nearly-empty text.
+  const quality = validateSourceQuality(rawText);
+  if (!quality.ok) {
+    return {
+      overview: title,
+      summary: "",
+      keyConcepts: [],
+      definitions: [],
+      sections: [],
+      facts: [],
+      examples: [],
+      relationships: [],
+      checklist: [],
+      notices: [
+        quality.reason ??
+          "We couldn't extract readable text from this document. Try uploading a text-based PDF, another supported format, or a clearer scan.",
+        "No study notes were generated because the source text quality is too low.",
+      ],
+    };
+  }
+
   const text = limitText(rawText, notices);
   const words = countWords(text);
   const keywords = keywordScores(text, 30);

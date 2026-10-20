@@ -162,19 +162,49 @@ export interface ScoredTerm {
   count: number;
 }
 
+/**
+ * Returns true when a token looks like meaningful text rather than extraction noise.
+ *
+ * Rejects:
+ *  - Pure numbers (page numbers, years used as tokens)
+ *  - Time/duration codes like "22h", "90d", "5s", "10min"
+ *  - Very short tokens (< 3 chars) that are too ambiguous
+ *  - Tokens where fewer than 60% of characters are alphabetic
+ *    (catches things like "iol", "als", "ais" if they lack enough letters, but
+ *     also catches "$8%", "=F", "UE" which are clearly extraction artifacts)
+ *  - Common English stopwords
+ *
+ * Does NOT reject:
+ *  - Legitimate abbreviations like "DNA", "RNA", "CPU"
+ *  - Domain terms that happen to be short, like "ion", "LED"
+ *  - Words with hyphens or apostrophes (handled by the tokenizer already)
+ */
+function isGoodKeywordToken(t: string): boolean {
+  if (t.length < 3) return false;
+  if (STOPWORDS.has(t)) return false;
+  if (/^\d+$/.test(t)) return false;
+  // Time/duration codes: e.g. "22h", "90d", "5s", "10min", "3hrs"
+  if (/^\d+(?:s|m|h|d|w|ms|min|hrs?|days?|wks?|mths?|yrs?)$/i.test(t)) return false;
+  // Tokens that are mostly non-alphabetic (extraction noise like "iol", "$8%", "=F")
+  const letters = (t.match(/[a-zA-ZÀ-ɏ؀-ۿ]/g) ?? []).length;
+  if (letters / t.length < 0.6) return false;
+  // Very short tokens (3 chars) must be at least 2/3 alphabetic and not look like an abbreviation
+  // This is already covered by the ratio check above (0.6 threshold), so just ensure minimum length.
+  return true;
+}
+
 /** Ranks candidate key terms by frequency (single words and repeated two-word phrases). */
 export function keywordScores(text: string, limit = 30): ScoredTerm[] {
   const tokens = tokenize(text);
   const counts = new Map<string, number>();
-  const good = (t: string) => t.length >= 3 && !STOPWORDS.has(t) && !/^\d+$/.test(t);
 
-  for (const t of tokens) if (good(t)) counts.set(t, (counts.get(t) ?? 0) + 1);
+  for (const t of tokens) if (isGoodKeywordToken(t)) counts.set(t, (counts.get(t) ?? 0) + 1);
 
   const bigrams = new Map<string, number>();
   for (let i = 0; i < tokens.length - 1; i++) {
     const a = tokens[i] as string;
     const b = tokens[i + 1] as string;
-    if (good(a) && good(b)) {
+    if (isGoodKeywordToken(a) && isGoodKeywordToken(b)) {
       const key = `${a} ${b}`;
       bigrams.set(key, (bigrams.get(key) ?? 0) + 1);
     }
@@ -345,6 +375,87 @@ export function coOccurrences(text: string, keywords: ScoredTerm[], limit = 10):
       (p) =>
         `“${p.a}” and “${p.b}” appear together in ${p.n} sentences (co-occurrence, not a verified relationship).`,
     );
+}
+
+/* ─────────────────────────── Source quality validation ─────────────────────────── */
+
+export interface SourceQualityResult {
+  ok: boolean;
+  reason?: string;
+}
+
+/**
+ * Validates extracted text quality before generating study material.
+ *
+ * Returns { ok: true } when the text is good enough to analyse.
+ * Returns { ok: false, reason } when the text is garbled, empty, or mostly noise.
+ *
+ * This is intentionally conservative: legitimate mathematical notation, code,
+ * chemical formulas, abbreviations, and multilingual content are NOT rejected.
+ */
+export function validateSourceQuality(text: string): SourceQualityResult {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) {
+    return { ok: false, reason: "The document appears to be empty." };
+  }
+
+  const sample = trimmed.slice(0, 20_000);
+
+  // 1. Replacement character density (encoding corruption)
+  const replacementCount = (sample.match(/�/g) ?? []).length;
+  if (replacementCount / sample.length > 0.05) {
+    return {
+      ok: false,
+      reason:
+        "The extracted text contains too many unreadable characters (encoding corruption). " +
+        "Try a different format or a text-based PDF.",
+    };
+  }
+
+  // 2. Token quality analysis
+  const tokens = sample.match(/[^\s]+/g) ?? [];
+  if (tokens.length < 5) {
+    return { ok: false, reason: "Not enough text could be extracted from this document." };
+  }
+
+  let alphaCount = 0; // tokens that are mostly alphabetic (good signal)
+  let shortNoisyCount = 0; // tokens that look like noise: "22h", "iol", "$8%", "=F"
+
+  for (const tok of tokens) {
+    const letters = (tok.match(/[a-zA-ZÀ-ɏ؀-ۿऀ-ॿ]/g) ?? []).length;
+    const alphaRatio = letters / tok.length;
+    if (alphaRatio >= 0.6) alphaCount++;
+    // Noise heuristic: short token where fewer than half of chars are alphabetic
+    // and it doesn't look like a pure number (which can be valid: "2024", "42")
+    if (tok.length <= 4 && alphaRatio < 0.5 && !/^\d+$/.test(tok)) {
+      shortNoisyCount++;
+    }
+  }
+
+  const alphaRatio = alphaCount / tokens.length;
+  const noisyRatio = shortNoisyCount / tokens.length;
+
+  if (tokens.length > 20 && alphaRatio < 0.35) {
+    return {
+      ok: false,
+      reason:
+        "We couldn't extract readable text from this document. " +
+        "The content doesn't appear to be in any supported language. " +
+        "Try uploading a text-based PDF, another supported format, or a clearer scan.",
+    };
+  }
+
+  if (tokens.length > 20 && noisyRatio > 0.45) {
+    return {
+      ok: false,
+      reason:
+        "We couldn't extract readable text from this document. " +
+        "It contains too many short, garbled fragments. " +
+        "Try uploading a text-based PDF, another supported format, or a clearer scan.",
+    };
+  }
+
+  return { ok: true };
 }
 
 /** Replaces the first whole-word occurrence of `term` in `sentence` with a blank. Returns null if absent. */

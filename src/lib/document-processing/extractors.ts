@@ -97,7 +97,31 @@ export async function extractPdf(
       let line = "";
       for (const item of content.items) {
         if ("str" in item) {
-          line += item.str;
+          if (item.str) {
+            // PDF.js items within a line may need a space between them when neither
+            // the current buffer nor the incoming token supplies one naturally.
+            if (
+              line &&
+              line[line.length - 1] !== " " &&
+              line[line.length - 1] !== "\n" &&
+              item.str[0] !== " "
+            ) {
+              // Only add a space if neither string ends/starts with punctuation that
+              // naturally joins (hyphen continuation, opening bracket, etc.).
+              const lastChar = line[line.length - 1] ?? "";
+              const firstChar = item.str[0] ?? "";
+              const joinsNaturally =
+                lastChar === "-" ||
+                lastChar === "(" ||
+                firstChar === ")" ||
+                firstChar === "," ||
+                firstChar === "." ||
+                firstChar === ":" ||
+                firstChar === ";";
+              if (!joinsNaturally) line += " ";
+            }
+            line += item.str;
+          }
           if (item.hasEOL) line += "\n";
         }
       }

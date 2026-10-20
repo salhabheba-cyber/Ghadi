@@ -1,7 +1,7 @@
 import type { DocumentKind, StudyDocument } from "@/lib/validation/schemas";
 import { MAX_DOCUMENT_CHARS } from "@/lib/validation/schemas";
 import { countWords, newId, nowIso, truncate } from "@/lib/utils";
-import { normalizeText } from "@/lib/study/text";
+import { normalizeText, validateSourceQuality } from "@/lib/study/text";
 import {
   DocumentProcessingError,
   extensionOf,
@@ -49,8 +49,33 @@ function finish(
       `The text was cut to the first ${MAX_DOCUMENT_CHARS.toLocaleString()} characters.`,
     );
   }
+
+  // If a status was explicitly set upstream (e.g. "needs-ocr"), preserve it unchanged.
+  if (p.status && p.status !== "ready") {
+    return { ...p, text, warnings, status: p.status };
+  }
+
   const hasText = text.trim().length > 0;
-  return { ...p, text, warnings, status: p.status ?? (hasText ? "ready" : "empty") };
+  if (!hasText) return { ...p, text, warnings, status: "empty" };
+
+  // Run source quality validation before marking the document as study-ready.
+  // This catches garbled PDFs, encoding corruption, and metadata-only content
+  // before any heuristic or AI generator has a chance to produce nonsense.
+  const quality = validateSourceQuality(text);
+  if (!quality.ok) {
+    return {
+      ...p,
+      text,
+      warnings: [
+        ...warnings,
+        quality.reason ??
+          "We couldn't extract readable text from this document. Try uploading a text-based PDF, another supported format, or a clearer scan.",
+      ],
+      status: "empty",
+    };
+  }
+
+  return { ...p, text, warnings, status: "ready" };
 }
 
 /**
