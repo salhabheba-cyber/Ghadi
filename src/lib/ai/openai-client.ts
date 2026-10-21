@@ -1,39 +1,20 @@
 /**
- * OpenAI client — server-only.
- * Uses the admin key stored in GHADI_HOSTED_AI_API_KEY (same env var as the
- * OpenAI-compatible hosted config, but accessed through the official SDK for
- * streaming, structured output, and richer error handling).
- *
- * Never imported by client bundles: all callers live inside API routes or
- * Server Actions that are tagged `"use server"`.
+ * Streaming/chat helpers still used by the chat and answer-check routes. Server-only.
+ * Configuration comes from src/lib/server/hosted-config.ts (OPENAI_API_KEY or GHADI_HOSTED_AI_*).
  */
-
-import OpenAI from "openai";
+import type OpenAI from "openai";
 import { readHostedConfig } from "@/lib/server/hosted-config";
+import { createClient, requireConfig } from "./openai-server";
 
-let _client: OpenAI | null = null;
-
+/** A fresh client per call, so a changed environment is always honoured. */
 export function getOpenAIClient(): OpenAI {
-  if (_client) return _client;
-  const cfg = readHostedConfig();
-  if (!cfg) {
-    throw new Error(
-      "OpenAI is not configured. Set GHADI_HOSTED_AI_API_KEY, GHADI_HOSTED_AI_BASE_URL and GHADI_HOSTED_AI_MODEL.",
-    );
-  }
-  _client = new OpenAI({
-    apiKey: cfg.apiKey,
-    baseURL: cfg.baseUrl,
-  });
-  return _client;
+  return createClient(requireConfig());
 }
 
 export function getModel(): string {
-  const cfg = readHostedConfig();
-  return cfg?.model ?? "gpt-4o-mini";
+  return requireConfig().model;
 }
 
-/** True when admin has configured the hosted AI key. */
 export function isOpenAIConfigured(): boolean {
   return readHostedConfig() !== null;
 }

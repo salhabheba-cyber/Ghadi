@@ -11,8 +11,9 @@
 import { z } from "zod";
 import { NextRequest } from "next/server";
 import { clientKey, rateLimit } from "@/lib/security/rate-limit";
-import { sameOriginOrNull, readJsonLimited } from "@/lib/server/http";
-import { getOpenAIClient, getModel, isOpenAIConfigured } from "@/lib/ai/openai-client";
+import { sameOriginOrNull, readJsonLimited, isJsonRequest } from "@/lib/server/http";
+import { createClient, isReasoningModel, requireConfig, toAiError } from "@/lib/ai/openai-server";
+import { readHostedConfig } from "@/lib/server/hosted-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +29,8 @@ const bodySchema = z.object({
   messages: z.array(messageSchema).min(1).max(60),
   /** Optional study context injected as a system message (document excerpt, quiz question, etc.) */
   context: z.string().max(8000).optional(),
+  /** The user has explicitly agreed to send this text to the hosted AI provider (it may cost money). */
+  consent: z.literal(true),
 });
 
 const GHADI_SYSTEM = `You are Ghadi, a friendly and encouraging AI study assistant.
@@ -41,7 +44,17 @@ export async function POST(req: NextRequest) {
     return new Response("Forbidden", { status: 403 });
   }
 
-  if (!isOpenAIConfigured()) {
+  if (!isJsonRequest(req)) {
+    return new Response(
+      JSON.stringify({
+        error: "unsupported-media-type",
+        message: "Send the request as application/json.",
+      }),
+      { status: 415, headers: { "Content-Type": "application/json" } },
+    );
+  }
+
+  if (!readHostedConfig()) {
     return new Response(
       JSON.stringify({ error: "not-configured", message: "AI is not configured on this server." }),
       { status: 501, headers: { "Content-Type": "application/json" } },
@@ -54,7 +67,10 @@ export async function POST(req: NextRequest) {
       JSON.stringify({ error: "rate-limited", message: "Too many requests. Please wait." }),
       {
         status: 429,
-        headers: { "Content-Type": "application/json", "Retry-After": String(limited.retryAfterSec) },
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": String(limited.retryAfterSec),
+        },
       },
     );
   }
@@ -70,7 +86,10 @@ export async function POST(req: NextRequest) {
   const parsed = bodySchema.safeParse(read.data);
   if (!parsed.success) {
     return new Response(
-      JSON.stringify({ error: "bad-request", message: "Invalid message format." }),
+      JSON.stringify({
+        error: "bad-request",
+        message: "Invalid request: a message and explicit consent are required.",
+      }),
       { status: 400, headers: { "Content-Type": "application/json" } },
     );
   }
@@ -85,8 +104,9 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const openai = getOpenAIClient();
-  const model = getModel();
+  const cfg = requireConfig();
+  const openai = createClient(cfg);
+  const model = cfg.model;
 
   // Create a readable stream for SSE
   const encoder = new TextEncoder();
@@ -96,8 +116,9 @@ export async function POST(req: NextRequest) {
         const completion = await openai.chat.completions.create({
           model,
           stream: true,
-          temperature: 0.7,
-          max_tokens: 1024,
+          ...(isReasoningModel(model)
+            ? { max_completion_tokens: 1024 }
+            : { max_tokens: 1024, temperature: 0.7 }),
           messages: [...systemMessages, ...messages],
         });
 
@@ -111,10 +132,8 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : "Unknown error";
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify({ error: msg })}\n\n`),
-        );
+        const msg = toAiError(err).message;
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: msg })}\n\n`));
       } finally {
         controller.close();
       }

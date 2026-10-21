@@ -195,6 +195,10 @@ export const quizSchema = z.object({
   origin: originSchema,
   difficulty: difficultySchema.default("medium"),
   language: z.string().max(40).default("same as source"),
+  /** Whether explanations were requested at generation time (they are stripped when false). */
+  includeExplanations: z.boolean().default(true),
+  /** When the learner sees whether an answer was right: after each question or at the end. */
+  feedbackMode: z.enum(["immediate", "end"]).default("end"),
   questions: z.array(questionSchema).min(1).max(200),
   tags,
   collectionId: id.optional(),

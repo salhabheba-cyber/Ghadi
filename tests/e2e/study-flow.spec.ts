@@ -44,15 +44,16 @@ test.describe("Ghadi core study flow (offline, no AI key)", () => {
       .click();
     await page.getByRole("button", { name: "Generate quiz" }).click();
     await expect(page).toHaveURL(/\/quizzes\/.+/, { timeout: 15_000 });
-    await page.getByRole("button", { name: "Start quiz" }).click();
+    await page.getByRole("button", { name: "Take Exam in Ghadi" }).click();
     for (let i = 0; i < 40; i++) {
-      if (await page.getByRole("button", { name: "Finish" }).isVisible()) break;
+      if (await page.getByRole("button", { name: "Review & submit" }).isVisible()) break;
       const radio = page.getByRole("radio").first();
       if (await radio.isVisible().catch(() => false)) await radio.check();
       else await page.getByLabel("Your answer").fill("chlorophyll");
       await page.getByRole("button", { name: /^(Next|Skip)/ }).click();
     }
-    await page.getByRole("button", { name: "Finish" }).click();
+    await page.getByRole("button", { name: "Review & submit" }).click();
+    await page.getByRole("button", { name: "Submit exam" }).click();
     await expect(page.getByTestId("score")).toBeVisible();
     await page.getByRole("button", { name: "Back to quiz" }).click();
     await expect(page.getByText("Attempt history")).toBeVisible();

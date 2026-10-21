@@ -7,8 +7,15 @@
 
 import { z } from "zod";
 import { clientKey, rateLimit } from "@/lib/security/rate-limit";
-import { sameOriginOrNull, readJsonLimited, jsonError, jsonOk } from "@/lib/server/http";
-import { getOpenAIClient, getModel, isOpenAIConfigured } from "@/lib/ai/openai-client";
+import {
+  sameOriginOrNull,
+  readJsonLimited,
+  jsonError,
+  jsonOk,
+  isJsonRequest,
+} from "@/lib/server/http";
+import { completeText, toAiError } from "@/lib/ai/openai-server";
+import { readHostedConfig } from "@/lib/server/hosted-config";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +28,8 @@ const bodySchema = z.object({
   userAnswer: z.string().min(0).max(500),
   language: z.enum(["en", "fr", "ar"]).default("en"),
   sourceExcerpt: z.string().max(1000).optional(),
+  /** The user has explicitly agreed to send their answer to the hosted AI provider. */
+  consent: z.literal(true),
 });
 
 const LANG_INSTRUCTIONS: Record<string, string> = {
@@ -30,9 +39,13 @@ const LANG_INSTRUCTIONS: Record<string, string> = {
 };
 
 export async function POST(req: Request) {
-  if (!sameOriginOrNull(req)) return jsonError(403, "forbidden", "Cross-site requests not allowed.");
+  if (!sameOriginOrNull(req))
+    return jsonError(403, "forbidden", "Cross-site requests not allowed.");
 
-  if (!isOpenAIConfigured()) {
+  if (!isJsonRequest(req))
+    return jsonError(415, "unsupported-media-type", "Send the request as application/json.");
+
+  if (!readHostedConfig()) {
     return jsonError(501, "not-configured", "AI is not configured on this server.");
   }
 
@@ -48,7 +61,11 @@ export async function POST(req: Request) {
 
   const parsed = bodySchema.safeParse(read.data);
   if (!parsed.success) {
-    return jsonError(400, "bad-request", "Invalid request body.");
+    return jsonError(
+      400,
+      "bad-request",
+      "Invalid request: the answer and explicit consent are required.",
+    );
   }
 
   const { question, correctAnswer, userAnswer, language, sourceExcerpt } = parsed.data;
@@ -74,34 +91,27 @@ Respond ONLY with a JSON object (no markdown):
     .join("\n");
 
   try {
-    const openai = getOpenAIClient();
-    const model = getModel();
-
-    const completion = await openai.chat.completions.create({
-      model,
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userContent },
-      ],
-    });
-
-    const raw = completion.choices[0]?.message?.content ?? "{}";
-    let result: { correct?: boolean; feedback?: string; correctAnswer?: string };
+    const { text: raw } = await completeText(
+      { system: systemPrompt, user: userContent, json: true, temperature: 0.2, maxTokens: 400 },
+      { timeoutMs: 30_000 },
+    );
+    let result: { correct?: unknown; feedback?: unknown; correctAnswer?: unknown };
     try {
       result = JSON.parse(raw);
     } catch {
-      result = {};
+      return jsonError(502, "invalid-output", "The AI returned an answer Ghadi could not read.");
     }
-
+    if (typeof result.correct !== "boolean") {
+      return jsonError(502, "invalid-output", "The AI did not return a clear verdict.");
+    }
     return jsonOk({
-      correct: result.correct ?? false,
-      feedback: result.feedback ?? "Could not evaluate answer.",
-      correctAnswer: result.correctAnswer ?? correctAnswer,
+      correct: result.correct,
+      feedback: typeof result.feedback === "string" ? result.feedback : "",
+      correctAnswer:
+        typeof result.correctAnswer === "string" ? result.correctAnswer : correctAnswer,
     });
   } catch (err) {
-    const msg = err instanceof Error ? err.message : "Unknown error";
-    return jsonError(502, "upstream-error", `AI check failed: ${msg}`);
+    const failure = toAiError(err);
+    return jsonError(failure.status, failure.code, failure.message);
   }
 }

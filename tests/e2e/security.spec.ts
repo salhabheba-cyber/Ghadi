@@ -78,7 +78,8 @@ test.describe("script safety in the real browser", () => {
       .click();
     await page.getByRole("button", { name: "Generate quiz" }).click();
     await page.waitForURL(/\/quizzes\//);
-    await page.getByRole("button", { name: "Start quiz" }).click();
+    await page.getByLabel("After each question").check();
+    await page.getByRole("button", { name: "Take Exam in Ghadi" }).click();
     await page.getByRole("radio").first().check();
     await page.getByRole("button", { name: "Check answer" }).click();
     await page.goto("/documents");

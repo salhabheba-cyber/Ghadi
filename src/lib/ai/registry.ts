@@ -26,8 +26,9 @@ export type GeneratedWithFallback<T> = Generated<T> & {
 
 /**
  * Runs a generation on the chosen provider. If that provider fails (not installed, unreachable,
- * timeout, bad output, no consent...), falls back to the offline generator and says so, so the UI
- * never presents offline output as model output. User cancellation is rethrown.
+ * timeout, bad output, no consent...) the error is rethrown so the UI can show it. Only when the
+ * caller explicitly sets `call.allowOfflineFallback` does it fall back to the offline generator, and
+ * then it says so in the notices, so offline output is never presented as model output.
  */
 export async function generateWithFallback<T>(
   settings: Settings,
@@ -41,6 +42,7 @@ export async function generateWithFallback<T>(
   } catch (error) {
     if (error instanceof ProviderError && error.code === "cancelled") throw error;
     if (call.signal?.aborted) throw new ProviderError("cancelled", "Generation was cancelled.");
+    if (!call.allowOfflineFallback) throw error;
     const reason = errorMessage(error);
     const result = await run(offlineProvider, call);
     return {

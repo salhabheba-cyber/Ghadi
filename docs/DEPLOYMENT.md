@@ -24,6 +24,9 @@ Everything is optional. See `.env.example`.
 
 | Variable                      | Purpose                           |
 | ----------------------------- | --------------------------------- |
+| `OPENAI_API_KEY`              | OpenAI key, secret, server only   |
+| `OPENAI_MODEL`                | optional, default `gpt-4.1-mini`  |
+| `OPENAI_BASE_URL`             | optional API base URL override    |
 | `GHADI_HOSTED_AI_PROVIDER`    | `openai-compatible`               |
 | `GHADI_HOSTED_AI_BASE_URL`    | e.g. `https://api.example.com/v1` |
 | `GHADI_HOSTED_AI_API_KEY`     | secret, server only               |
@@ -31,7 +34,9 @@ Everything is optional. See `.env.example`.
 | `GHADI_URL_IMPORT_MAX_BYTES`  | max page size (default 2,000,000) |
 | `GHADI_URL_IMPORT_TIMEOUT_MS` | fetch timeout (default 10,000)    |
 
-Hosted AI is enabled only when **all four** `GHADI_HOSTED_AI_*` variables are set. Users must still consent in Settings.
+Hosted AI is enabled when `OPENAI_API_KEY` is set, or when **all four** `GHADI_HOSTED_AI_*` variables are set (the generic set wins if both are present). Users must still choose the hosted generator and consent in Settings; Ghadi never sends documents to a cloud AI without that consent, and never switches from offline to cloud on its own. Use **Settings → Test connection** to verify the key with a real request.
+
+On Railway: service → Variables → add `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`), then redeploy.
 
 ## HTTPS
 

@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { QuizPlayer } from "@/components/quiz/player";
 import { QuizResults } from "@/components/quiz/results";
 import { UiProvider } from "@/components/ui/primitives";
@@ -13,6 +13,8 @@ const quiz: Quiz = {
   origin: "heuristic",
   difficulty: "easy",
   language: "same as source",
+  includeExplanations: true,
+  feedbackMode: "end",
   tags: [],
   createdAt: iso,
   updatedAt: iso,
@@ -39,14 +41,21 @@ const quiz: Quiz = {
   ],
 };
 
-function setup(mode: "immediate" | "end") {
+beforeEach(() => localStorage.clear());
+
+function setup(mode: "immediate" | "end", props: { timeLimitMin?: number } = {}) {
   const onFinish = vi.fn<(a: QuizAttempt) => void>();
-  render(
+  const view = render(
     <UiProvider>
-      <QuizPlayer quiz={quiz} feedbackMode={mode} onFinish={onFinish} onExit={vi.fn()} />
+      <QuizPlayer quiz={quiz} feedbackMode={mode} onFinish={onFinish} onExit={vi.fn()} {...props} />
     </UiProvider>,
   );
-  return { onFinish, user: userEvent.setup() };
+  return { onFinish, user: userEvent.setup(), view };
+}
+
+async function submit(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getAllByRole("button", { name: /Submit|Review & submit/ })[0]!);
+  await user.click(screen.getByRole("button", { name: "Submit exam" }));
 }
 
 describe("QuizPlayer", () => {
@@ -72,7 +81,7 @@ describe("QuizPlayer", () => {
     const { user, onFinish } = setup("end");
     await user.click(screen.getByRole("radio", { name: "Mitochondria" }));
     await user.click(screen.getByRole("button", { name: "Next" }));
-    await user.click(screen.getByRole("button", { name: "Finish" }));
+    await submit(user);
     const attempt = onFinish.mock.calls[0]![0];
     expect(attempt).toMatchObject({ quizId: "quiz1", score: 1, total: 2, feedbackMode: "end" });
     expect(attempt.answers.find((a) => a.questionId === "q2")).toMatchObject({
@@ -85,10 +94,105 @@ describe("QuizPlayer", () => {
     const { user, onFinish } = setup("end");
     await user.click(screen.getByRole("button", { name: "Skip" }));
     await user.type(screen.getByLabelText("Your answer"), "  NUCLEUS! ");
-    await user.click(screen.getByRole("button", { name: "Finish" }));
+    await submit(user);
     expect(onFinish.mock.calls[0]![0].answers.find((a) => a.questionId === "q2")?.correct).toBe(
       true,
     );
+  });
+});
+
+describe("QuizPlayer exam features", () => {
+  it("jumps to a question by number and flags unanswered ones", async () => {
+    const { user } = setup("end");
+    expect(screen.getByRole("button", { name: "Question 2, unanswered" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Question 2, unanswered" }));
+    expect(screen.getByText(/The ____ stores DNA/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Previous" }));
+    await user.click(screen.getByRole("radio", { name: "Nucleus" }));
+    expect(screen.getByRole("button", { name: "Question 1, answered" })).toBeInTheDocument();
+  });
+
+  it("lets the learner edit an answer before submitting", async () => {
+    const { user, onFinish } = setup("end");
+    await user.click(screen.getByRole("radio", { name: "Nucleus" }));
+    await user.click(screen.getByRole("radio", { name: "Mitochondria" }));
+    await submit(user);
+    expect(onFinish.mock.calls[0]![0].score).toBe(1);
+  });
+
+  it("marks questions for review", async () => {
+    const { user } = setup("end");
+    await user.click(screen.getByRole("button", { name: "Mark for review" }));
+    expect(
+      screen.getByRole("button", { name: /Question 1, unanswered, marked for review/ }),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Marked for review/ }));
+    expect(screen.getByRole("button", { name: "Question 1, unanswered" })).toBeInTheDocument();
+  });
+
+  it("asks for confirmation and reports what is unanswered; nothing is submitted until confirmed", async () => {
+    const { user, onFinish } = setup("end");
+    await user.click(screen.getByRole("radio", { name: "Mitochondria" }));
+    await user.click(screen.getAllByRole("button", { name: /Submit/ })[0]!);
+    expect(screen.getByText("Submit your exam?")).toBeInTheDocument();
+    expect(screen.getByText(/1 of 2 answered/)).toBeInTheDocument();
+    expect(screen.getByText(/1 unanswered \(2\)/)).toBeInTheDocument();
+    expect(onFinish).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Keep working" }));
+    expect(screen.queryByText("Submit your exam?")).toBeNull();
+    expect(onFinish).not.toHaveBeenCalled();
+  });
+
+  it("auto-saves answers and restores them after a refresh, then clears on submit", async () => {
+    const first = setup("end");
+    await first.user.click(screen.getByRole("radio", { name: "Mitochondria" }));
+    first.view.unmount();
+    const second = setup("end");
+    expect(screen.getByText("Your saved progress was restored.")).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Mitochondria" })).toBeChecked();
+    await submit(second.user);
+    expect(second.onFinish.mock.calls[0]![0].score).toBe(1);
+    expect(localStorage.getItem("ghadi:exam:quiz1")).toBeNull();
+  });
+
+  it("does not leak the correct answer in the DOM before submission", async () => {
+    setup("end");
+    expect(document.body.innerHTML).not.toContain("It makes ATP.");
+    expect(screen.queryByText(/Correct answer/)).toBeNull();
+  });
+
+  it("shows a countdown timer that survives a refresh", async () => {
+    const { view } = setup("end", { timeLimitMin: 10 });
+    expect(screen.getByRole("timer")).toHaveTextContent(/9:5\d|10:00/);
+    const saved = JSON.parse(localStorage.getItem("ghadi:exam:quiz1")!) as { deadline: number };
+    view.unmount();
+    setup("end", { timeLimitMin: 10 });
+    const again = JSON.parse(localStorage.getItem("ghadi:exam:quiz1")!) as { deadline: number };
+    expect(again.deadline).toBe(saved.deadline);
+  });
+
+  it("auto-submits when time runs out", async () => {
+    vi.useFakeTimers();
+    try {
+      const onFinish = vi.fn<(a: QuizAttempt) => void>();
+      render(
+        <UiProvider>
+          <QuizPlayer
+            quiz={quiz}
+            feedbackMode="end"
+            timeLimitMin={1}
+            onFinish={onFinish}
+            onExit={vi.fn()}
+          />
+        </UiProvider>,
+      );
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(61_000);
+      });
+      expect(onFinish).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

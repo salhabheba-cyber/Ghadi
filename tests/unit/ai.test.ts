@@ -263,26 +263,41 @@ describe("fallback to offline", () => {
     expect(r.fellBackBecause).toBeUndefined();
   });
 
-  it("falls back when hosted AI is selected without consent, and says so", async () => {
+  it("does NOT silently fall back: a failing hosted provider surfaces the error", async () => {
     const settings = settingsSchema.parse({ provider: "hosted", hostedConsent: false });
-    const r = await generateWithFallback(settings, (p) =>
-      p.summarizeContent({ title: "t", text: SOURCE }),
+    await expect(
+      generateWithFallback(settings, (p) => p.summarizeContent({ title: "t", text: SOURCE })),
+    ).rejects.toMatchObject({ code: "consent-required" });
+  });
+
+  it("falls back to offline only when the caller explicitly allows it, and says so", async () => {
+    const settings = settingsSchema.parse({ provider: "hosted", hostedConsent: false });
+    const r = await generateWithFallback(
+      settings,
+      (p) => p.summarizeContent({ title: "t", text: SOURCE }),
+      { allowOfflineFallback: true },
     );
     expect(r.origin).toBe("heuristic");
     expect(r.fellBackBecause).toMatch(/consent/i);
     expect(r.notices[0]).toMatch(/used offline heuristics instead/);
   });
 
-  it("falls back when a model errors, but never swallows user cancellation", async () => {
+  it("never swallows user cancellation, even when fallback is allowed", async () => {
     const settings = settingsSchema.parse({ provider: "ollama", ollamaEndpoint: "not a url" });
-    const r = await generateWithFallback(settings, (p) =>
-      p.summarizeContent({ title: "t", text: SOURCE }),
+    const r = await generateWithFallback(
+      settings,
+      (p) => p.summarizeContent({ title: "t", text: SOURCE }),
+      { allowOfflineFallback: true },
     );
     expect(r.origin).toBe("heuristic");
     await expect(
-      generateWithFallback(settings, async () => {
-        throw new ProviderError("cancelled", "stop");
-      }),
+      generateWithFallback(
+        settings,
+        async () => {
+          throw new ProviderError("cancelled", "stop");
+        },
+        { allowOfflineFallback: true },
+      ),
     ).rejects.toMatchObject({ code: "cancelled" });
   });
 });
@@ -303,9 +318,42 @@ describe("hosted configuration (server side)", () => {
       GHADI_HOSTED_AI_MODEL: "model-x",
     } as unknown as NodeJS.ProcessEnv);
     expect(cfg).toEqual({
+      provider: "openai-compatible",
       baseUrl: "https://api.example.com/v1",
       apiKey: "placeholder-key",
       model: "model-x",
     });
+  });
+
+  it("supports OPENAI_API_KEY with an optional model and base URL", () => {
+    const env = (e: Record<string, string>) => e as unknown as NodeJS.ProcessEnv;
+    expect(readHostedConfig(env({ OPENAI_API_KEY: "sk-placeholder" }))).toEqual({
+      provider: "openai",
+      baseUrl: "https://api.openai.com/v1",
+      apiKey: "sk-placeholder",
+      model: "gpt-4.1-mini",
+    });
+    expect(
+      readHostedConfig(
+        env({
+          OPENAI_API_KEY: "k",
+          OPENAI_MODEL: "gpt-5-mini",
+          OPENAI_BASE_URL: "https://proxy.test/v1/",
+        }),
+      ),
+    ).toMatchObject({ model: "gpt-5-mini", baseUrl: "https://proxy.test/v1" });
+    expect(readHostedConfig(env({ OPENAI_API_KEY: "k", OPENAI_BASE_URL: "not a url" }))).toBeNull();
+    expect(readHostedConfig(env({ OPENAI_API_KEY: "   " }))).toBeNull();
+  });
+
+  it("prefers the explicit GHADI_HOSTED_AI_* settings when both are present", () => {
+    const cfg = readHostedConfig({
+      GHADI_HOSTED_AI_PROVIDER: "openai-compatible",
+      GHADI_HOSTED_AI_BASE_URL: "https://api.example.com/v1",
+      GHADI_HOSTED_AI_API_KEY: "a",
+      GHADI_HOSTED_AI_MODEL: "m",
+      OPENAI_API_KEY: "b",
+    } as unknown as NodeJS.ProcessEnv);
+    expect(cfg?.apiKey).toBe("a");
   });
 });

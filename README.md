@@ -70,7 +70,7 @@ Every note, quiz and deck records its origin (_Offline heuristics_, _Local AI_, 
 
 ### Hosted AI setup (optional, server operators)
 
-Copy `.env.example` to `.env.local` and set the four `GHADI_HOSTED_AI_*` variables. Keys are read only on the server and are never sent to the browser. The server builds its own prompts, caps input size, rate-limits requests (10/min per client), and validates the model's JSON output. It is **not** an open LLM proxy. See [docs/PRIVACY.md](docs/PRIVACY.md).
+Copy `.env.example` to `.env.local` and set `OPENAI_API_KEY` (optionally `OPENAI_MODEL`), or the four generic `GHADI_HOSTED_AI_*` variables. Keys are read only on the server and are never sent to the browser. The server builds its own prompts, caps input size, rate-limits requests (10/min per client), and validates the model's JSON output. It is **not** an open LLM proxy. See [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## 7. Importing documents
 

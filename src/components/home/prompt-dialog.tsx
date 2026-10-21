@@ -1,11 +1,13 @@
 "use client";
 import { Loader2 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Button, Dialog, Field, Notice, Textarea, useToast } from "@/components/ui/primitives";
 import { useLanguage } from "@/hooks/use-language";
 import { useSettings } from "@/hooks/use-settings";
 import { processPastedText, toStudyDocument } from "@/lib/document-processing/process";
+import { generateQuizFromTopic } from "@/lib/actions";
 import { saveDocument } from "@/lib/storage/repo";
 import { errorMessage } from "@/lib/utils";
 
@@ -20,14 +22,14 @@ async function streamAnswer(
   const res = await fetch("/api/ai/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ messages: [{ role: "user", content: prompt }], consent: true }),
     signal,
   });
   if (!res.ok || !res.body) {
     let message = `The AI service answered with an error (${res.status}).`;
     try {
-      const j = (await res.json()) as { message?: string };
-      if (j.message) message = j.message;
+      const j = (await res.json()) as { message?: string; error?: { message?: string } };
+      message = j.error?.message ?? j.message ?? message;
     } catch {
       /* keep the generic message */
     }
@@ -67,6 +69,8 @@ export function PromptDialog({
   const { t } = useLanguage();
   const settings = useSettings();
   const toast = useToast();
+  const router = useRouter();
+  const [quizBusy, setQuizBusy] = useState(false);
   const [text, setText] = useState("");
   const [answer, setAnswer] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
@@ -75,7 +79,7 @@ export function PromptDialog({
   const abortRef = useRef<AbortController | null>(null);
 
   const trimmed = text.trim();
-  const busy = phase === "working";
+  const busy = phase === "working" || quizBusy;
 
   function close() {
     abortRef.current?.abort();
@@ -117,6 +121,42 @@ export function PromptDialog({
       if (ctrl.signal.aborted) return;
       setError(errorMessage(e));
       setPhase("idle");
+    }
+  }
+
+  async function topicQuiz() {
+    setError(null);
+    setNotice(null);
+    if (settings.provider === "offline") {
+      setNotice("not-configured");
+      return;
+    }
+    if (settings.provider === "hosted" && !settings.hostedConsent) {
+      setNotice("needs-consent");
+      return;
+    }
+    setQuizBusy(true);
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    try {
+      const r = await generateQuizFromTopic(
+        trimmed,
+        {
+          count: 8,
+          difficulty: "medium",
+          types: ["mcq", "tf", "short"],
+          includeExplanations: true,
+          feedbackMode: "end",
+        },
+        { signal: ctrl.signal },
+      );
+      toast(`Saved “${r.item.title}”.`, "good");
+      onClose();
+      router.push(`/quizzes/${r.item.id}`);
+    } catch (e) {
+      if (!ctrl.signal.aborted) setError(errorMessage(e));
+    } finally {
+      setQuizBusy(false);
     }
   }
 
@@ -187,7 +227,12 @@ export function PromptDialog({
           >
             {t.promptUseAsSource}
           </Button>
+          <Button variant="secondary" disabled={!trimmed || busy} onClick={() => void topicQuiz()}>
+            {quizBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+            {quizBusy ? t.promptTopicQuizWorking : t.promptTopicQuiz}
+          </Button>
         </div>
+        <p className="text-xs text-[var(--muted)]">{t.promptTopicQuizNotice}</p>
       </form>
 
       {answer ? (

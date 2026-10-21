@@ -14,7 +14,12 @@ import {
   useToast,
 } from "@/components/ui/primitives";
 import { useSettings } from "@/hooks/use-settings";
-import { fetchHostedStatus, type HostedStatus } from "@/lib/ai/hosted-client";
+import {
+  fetchHostedStatus,
+  testHostedConnection,
+  type HostedStatus,
+  type HostedTestResult,
+} from "@/lib/ai/hosted-client";
 import { testOllamaConnection, type OllamaConnectionResult } from "@/lib/ai/ollama";
 import { deckToCsv, downloadText } from "@/lib/export";
 import {
@@ -40,6 +45,8 @@ export default function SettingsPage() {
   const [ollama, setOllama] = useState<OllamaConnectionResult | null>(null);
   const [testing, setTesting] = useState(false);
   const [hosted, setHosted] = useState<HostedStatus | null>(null);
+  const [hostedTest, setHostedTest] = useState<HostedTestResult | null>(null);
+  const [hostedTesting, setHostedTesting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const [restoreMode, setRestoreMode] = useState<RestoreMode>("merge");
   const [busy, setBusy] = useState(false);
@@ -48,6 +55,13 @@ export default function SettingsPage() {
     void fetchHostedStatus().then(setHosted);
   }, []);
   const update = (patch: Partial<Settings>) => setEdits((e) => ({ ...e, ...patch }));
+
+  async function runHostedTest() {
+    setHostedTesting(true);
+    setHostedTest(null);
+    setHostedTest(await testHostedConnection());
+    setHostedTesting(false);
+  }
 
   async function save() {
     try {
@@ -151,8 +165,8 @@ export default function SettingsPage() {
                 ],
                 [
                   "hosted",
-                  "Hosted AI (server-side)",
-                  "Sends document text to the AI provider configured on this Ghadi server. Needs your consent.",
+                  "Hosted AI: OpenAI (cloud)",
+                  "Cloud-based. Sends document text to the AI provider configured on this Ghadi server. Needs your consent and may cost money.",
                 ],
               ] as const
             ).map(([value, label, hint]) => (
@@ -225,21 +239,53 @@ export default function SettingsPage() {
 
           {form.provider === "hosted" ? (
             <div className="space-y-3 rounded-lg bg-[var(--surface-2)] p-4">
-              <p className="text-sm">
-                Server status:{" "}
-                {hosted === null ? (
-                  "checking…"
-                ) : hosted.configured ? (
-                  <Badge tone="good">configured{hosted.model ? ` (${hosted.model})` : ""}</Badge>
-                ) : (
-                  <Badge tone="warn">not configured</Badge>
-                )}
-              </p>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+                <dt className="text-[var(--muted)]">Provider</dt>
+                <dd>
+                  {hosted?.configured
+                    ? hosted.provider === "openai"
+                      ? "OpenAI"
+                      : "OpenAI-compatible service"
+                    : "None configured"}{" "}
+                  <Badge tone="warn">cloud</Badge>
+                </dd>
+                <dt className="text-[var(--muted)]">Model</dt>
+                <dd>{hosted?.configured ? (hosted.model ?? "unknown") : "n/a"}</dd>
+                <dt className="text-[var(--muted)]">Status</dt>
+                <dd>
+                  {hosted === null ? (
+                    "checking…"
+                  ) : hosted.configured ? (
+                    <Badge tone="good">configured on the server</Badge>
+                  ) : (
+                    <Badge tone="warn">not configured</Badge>
+                  )}
+                </dd>
+              </dl>
               {hosted && !hosted.configured ? (
                 <Notice tone="warn">
-                  No hosted provider is set up on this server, so Ghadi will use offline heuristics.
-                  The server owner can configure one with environment variables (see .env.example).
+                  No hosted provider is set up on this server, so Ghadi uses offline heuristics. The
+                  server owner can enable OpenAI by setting <code>OPENAI_API_KEY</code> (see
+                  .env.example).
                 </Notice>
+              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                <Button
+                  variant="secondary"
+                  disabled={hostedTesting || hosted?.configured !== true}
+                  onClick={() => void runHostedTest()}
+                >
+                  {hostedTesting ? "Testing…" : "Test connection"}
+                </Button>
+              </div>
+              {hostedTest ? (
+                <div aria-live="polite">
+                  <Notice tone={hostedTest.ok ? "good" : "error"}>
+                    {hostedTest.ok
+                      ? `Connected: ${hostedTest.model} answered in ${hostedTest.latencyMs} ms.`
+                      : hostedTest.message}
+                  </Notice>
+                </div>
               ) : null}
               <label className="flex items-start gap-2 text-sm">
                 <input
@@ -249,11 +295,16 @@ export default function SettingsPage() {
                   onChange={(e) => update({ hostedConsent: e.target.checked })}
                 />
                 <span>
-                  I understand that the text of documents I generate material from will be sent to a
-                  third-party AI provider through this server. API keys stay on the server and are
-                  never exposed to my browser.
+                  I understand that the text of documents I generate material from, and any prompts
+                  or quiz answers I send for AI help, will be sent to a third-party AI provider
+                  through this server, and that API usage may incur costs. API keys stay on the
+                  server and are never exposed to my browser.
                 </span>
               </label>
+              <p className="text-xs text-[var(--muted)]">
+                If the hosted provider fails, Ghadi tells you and offers offline generation. It
+                never switches silently.
+              </p>
             </div>
           ) : null}
         </Card>

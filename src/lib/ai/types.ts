@@ -3,6 +3,8 @@ import type { Difficulty, Origin, QuestionType } from "@/lib/validation/schemas"
 export interface SourceInput {
   title: string;
   text: string;
+  /** Set for a topic-based quiz with no source document (model knowledge, not grounded). */
+  topic?: string;
 }
 
 export interface NoteOptions {
@@ -73,6 +75,11 @@ export type ProviderId = "offline" | "ollama" | "hosted";
 
 export interface CallOptions {
   signal?: AbortSignal;
+  /**
+   * When the chosen AI provider fails, generate with offline heuristics instead. Off by default: the
+   * UI shows the error and lets the user opt in, so output is never silently swapped.
+   */
+  allowOfflineFallback?: boolean;
 }
 
 /**

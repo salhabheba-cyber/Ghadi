@@ -1,6 +1,6 @@
 "use client";
-import { ArrowLeft, ArrowRight, Flag, Loader2, Sparkles } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { ArrowLeft, ArrowRight, Bookmark, Clock, Flag, Loader2, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, Input, Notice } from "@/components/ui/primitives";
 import { gradeResponse, prepareQuestionsForAttempt, scoreQuiz } from "@/lib/study/quiz-engine";
 import { newId, nowIso } from "@/lib/utils";
@@ -131,13 +131,63 @@ async function callAiCheck(payload: {
   const res = await fetch("/api/quiz/check", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ ...payload, consent: true }),
   });
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { message?: string }).message ?? `HTTP ${res.status}`);
+    const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(err.error?.message ?? `The check failed (HTTP ${res.status}).`);
   }
   return res.json() as Promise<AiCheckResult>;
+}
+
+// ── Draft persistence (localStorage; best-effort, never required) ─────────────
+
+interface Draft {
+  index: number;
+  responses: Record<string, string>;
+  marked: Record<string, boolean>;
+  deadline: number | null;
+  quizUpdatedAt?: string;
+}
+
+function loadDraft(key: string, quiz: Quiz): Draft | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as Draft;
+    if (d.quizUpdatedAt && quiz.updatedAt && d.quizUpdatedAt !== quiz.updatedAt) return null;
+    const ids = new Set(quiz.questions.map((x) => x.id));
+    const responses = Object.fromEntries(
+      Object.entries(d.responses ?? {}).filter(([id, v]) => ids.has(id) && typeof v === "string"),
+    );
+    const marked = Object.fromEntries(Object.entries(d.marked ?? {}).filter(([id]) => ids.has(id)));
+    // An expired deadline is kept on purpose: the exam submits at once instead of restarting the clock.
+    const deadline = typeof d.deadline === "number" ? d.deadline : null;
+    return { index: Number(d.index) || 0, responses, marked, deadline };
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(key: string, d: Draft) {
+  try {
+    localStorage.setItem(key, JSON.stringify(d));
+  } catch {
+    /* storage unavailable: the exam still works, it just cannot be recovered */
+  }
+}
+
+function clearDraft(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+function formatClock(sec: number): string {
+  const m = Math.floor(sec / 60);
+  return `${m}:${String(sec % 60).padStart(2, "0")}`;
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -147,6 +197,7 @@ export function QuizPlayer({
   feedbackMode,
   aiCheckEnabled,
   lang,
+  timeLimitMin,
   onFinish,
   onExit,
 }: {
@@ -156,17 +207,35 @@ export function QuizPlayer({
   aiCheckEnabled?: boolean;
   /** Language for AI feedback: "en" | "fr" | "ar" — defaults to "en" */
   lang?: "en" | "fr" | "ar";
+  /** Optional countdown in minutes. Persisted as an absolute deadline so a refresh cannot reset it. */
+  timeLimitMin?: number;
   onFinish: (attempt: QuizAttempt) => void;
   onExit: () => void;
 }) {
   const questions = useMemo(() => prepareQuestionsForAttempt(quiz.questions), [quiz]);
   const startedAt = useRef(nowIso());
-  const [index, setIndex] = useState(0);
-  const [responses, setResponses] = useState<Record<string, string>>({});
+  const storageKey = `ghadi:exam:${quiz.id}`;
+  const saved = useMemo(() => loadDraft(storageKey, quiz), [storageKey, quiz]);
+  const [index, setIndex] = useState(() => Math.min(saved?.index ?? 0, questions.length - 1));
+  const [responses, setResponses] = useState<Record<string, string>>(saved?.responses ?? {});
+  const [marked, setMarked] = useState<Record<string, boolean>>(saved?.marked ?? {});
+  const [confirming, setConfirming] = useState(false);
+  const [restored] = useState(Boolean(saved && Object.keys(saved.responses).length > 0));
+  const [deadline] = useState<number | null>(() =>
+    timeLimitMin && timeLimitMin > 0
+      ? (saved?.deadline ?? Date.now() + timeLimitMin * 60_000)
+      : null,
+  );
+  const [now, setNow] = useState(() => Date.now());
   // Local exact-match checked state (non-AI path)
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   // Per-question AI check state
   const [aiChecks, setAiChecks] = useState<Record<string, AiCheckState>>({});
+
+  // Auto-save every change so a refresh or accidental close loses nothing.
+  useEffect(() => {
+    saveDraft(storageKey, { index, responses, marked, deadline, quizUpdatedAt: quiz.updatedAt });
+  }, [storageKey, index, responses, marked, deadline, quiz.updatedAt]);
 
   const q = questions[index]!;
   const response = responses[q.id] ?? "";
@@ -219,6 +288,7 @@ export function QuizPlayer({
 
   // ── Finish ─────────────────────────────────────────────────────────────────
   function finish() {
+    clearDraft(storageKey);
     const result = scoreQuiz({ questions }, responses, aiChecks);
     onFinish({
       id: newId(),
@@ -233,16 +303,48 @@ export function QuizPlayer({
     });
   }
 
+  const finishRef = useRef(finish);
+  useEffect(() => {
+    finishRef.current = finish;
+  });
+  useEffect(() => {
+    if (deadline === null) return;
+    const t = setInterval(() => {
+      const n = Date.now();
+      setNow(n);
+      if (n >= deadline) {
+        clearInterval(t);
+        finishRef.current();
+      }
+    }, 1000);
+    return () => clearInterval(t);
+  }, [deadline]);
+  const remainingSec = deadline === null ? null : Math.max(0, Math.ceil((deadline - now) / 1000));
+  const unanswered = questions.filter((x) => (responses[x.id] ?? "").trim() === "");
+  const markedCount = questions.filter((x) => marked[x.id]).length;
+
   return (
     <div className="space-y-4">
+      {restored ? <Notice tone="info">Your saved progress was restored.</Notice> : null}
       {/* Progress bar */}
       <div className="flex items-center justify-between text-sm">
         <span aria-live="polite">
-          Question {index + 1} of {questions.length}
+          Question {index + 1} of {questions.length} · {answeredCount} answered
         </span>
-        <Button variant="ghost" size="sm" onClick={onExit}>
-          Exit quiz
-        </Button>
+        <span className="flex items-center gap-2">
+          {remainingSec !== null ? (
+            <span
+              role="timer"
+              aria-label={`Time left ${formatClock(remainingSec)}`}
+              className={`inline-flex items-center gap-1 font-mono ${remainingSec <= 60 ? "text-red-600 dark:text-red-400" : ""}`}
+            >
+              <Clock className="h-4 w-4" aria-hidden /> {formatClock(remainingSec)}
+            </span>
+          ) : null}
+          <Button variant="ghost" size="sm" onClick={onExit}>
+            Exit (progress is kept)
+          </Button>
+        </span>
       </div>
       <div
         className="h-2 overflow-hidden rounded-full bg-[var(--surface-2)]"
@@ -257,6 +359,44 @@ export function QuizPlayer({
           style={{ width: `${(answeredCount / questions.length) * 100}%` }}
         />
       </div>
+
+      {/* Question navigator */}
+      <nav aria-label="Question navigator">
+        <ul className="flex flex-wrap gap-1.5">
+          {questions.map((x, i) => {
+            const answered = (responses[x.id] ?? "").trim() !== "";
+            const state = `${answered ? "answered" : "unanswered"}${marked[x.id] ? ", marked for review" : ""}`;
+            return (
+              <li key={x.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirming(false);
+                    setIndex(i);
+                  }}
+                  aria-label={`Question ${i + 1}, ${state}`}
+                  aria-current={i === index ? "step" : undefined}
+                  className={`relative h-9 min-w-9 rounded-lg border px-2 text-sm font-medium ${
+                    i === index
+                      ? "border-brand-600 bg-brand-600 text-white"
+                      : answered
+                        ? "border-brand-300 bg-brand-50 text-brand-800 dark:bg-brand-900/30 dark:text-brand-100"
+                        : "border-dashed border-[var(--border)] text-[var(--muted)]"
+                  }`}
+                >
+                  {i + 1}
+                  {marked[x.id] ? (
+                    <Bookmark
+                      className="absolute -right-1 -top-1 h-3.5 w-3.5 fill-amber-400 text-amber-500"
+                      aria-hidden
+                    />
+                  ) : null}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
 
       {/* Question card */}
       <Card className="space-y-4">
@@ -325,6 +465,19 @@ export function QuizPlayer({
           )}
         </fieldset>
 
+        <button
+          type="button"
+          onClick={() => setMarked((m) => ({ ...m, [q.id]: !m[q.id] }))}
+          aria-pressed={Boolean(marked[q.id])}
+          className="inline-flex items-center gap-1.5 text-sm text-[var(--muted)] hover:underline"
+        >
+          <Bookmark
+            className={`h-4 w-4 ${marked[q.id] ? "fill-amber-400 text-amber-500" : ""}`}
+            aria-hidden
+          />
+          {marked[q.id] ? "Marked for review" : "Mark for review"}
+        </button>
+
         {/* ── Feedback area ── */}
 
         {/* Ghadi AI feedback (fill/short) */}
@@ -364,7 +517,9 @@ export function QuizPlayer({
               {!localCorrect ? (
                 <span className="block">Correct answer: {q.correct.join(" / ")}</span>
               ) : null}
-              {q.explanation ? <span className="mt-1 block">{q.explanation}</span> : null}
+              {q.explanation && quiz.includeExplanations !== false ? (
+                <span className="mt-1 block">{q.explanation}</span>
+              ) : null}
             </Notice>
           </div>
         ) : null}
@@ -404,22 +559,49 @@ export function QuizPlayer({
           ) : null}
 
           {last ? (
-            <Button onClick={finish}>
-              <Flag className="h-4 w-4" aria-hidden /> Finish
+            <Button onClick={() => setConfirming(true)}>
+              <Flag className="h-4 w-4" aria-hidden /> Review &amp; submit
             </Button>
           ) : (
-            <Button onClick={() => setIndex(index + 1)}>
-              {response.trim() === "" ? "Skip" : "Next"}{" "}
-              <ArrowRight className="h-4 w-4" aria-hidden />
-            </Button>
+            <>
+              <Button variant="secondary" onClick={() => setConfirming(true)}>
+                <Flag className="h-4 w-4" aria-hidden /> Submit
+              </Button>
+              <Button onClick={() => setIndex(index + 1)}>
+                {response.trim() === "" ? "Skip" : "Next"}{" "}
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </Button>
+            </>
           )}
         </div>
       </div>
 
-      {last && answeredCount < questions.length ? (
-        <p className="text-sm text-[var(--muted)]">
-          {questions.length - answeredCount} question(s) unanswered; they will count as incorrect.
-        </p>
+      {confirming ? (
+        <Card
+          className="space-y-3 border-2 border-brand-400"
+          role="alertdialog"
+          aria-labelledby="submit-title"
+        >
+          <h2 id="submit-title" className="text-lg font-semibold">
+            Submit your exam?
+          </h2>
+          <p className="text-sm">
+            {answeredCount} of {questions.length} answered.
+            {unanswered.length > 0
+              ? ` ${unanswered.length} unanswered (${unanswered
+                  .map((x) => questions.indexOf(x) + 1)
+                  .join(", ")}) will count as incorrect.`
+              : ""}
+            {markedCount > 0 ? ` ${markedCount} marked for review.` : ""}
+          </p>
+          <p className="text-xs text-[var(--muted)]">You cannot change answers after submitting.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={finish}>Submit exam</Button>
+            <Button variant="secondary" onClick={() => setConfirming(false)}>
+              Keep working
+            </Button>
+          </div>
+        </Card>
       ) : null}
     </div>
   );

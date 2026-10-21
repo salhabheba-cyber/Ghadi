@@ -10,6 +10,7 @@ import {
 import { readHostedConfig } from "@/lib/server/hosted-config";
 import { buildPrompt, parseTaskOutput, taskNameSchema, taskPayloadSchema } from "@/lib/ai/tasks";
 import { ProviderError } from "@/lib/ai/types";
+import { completeText, toAiError } from "@/lib/ai/openai-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -70,59 +71,20 @@ export async function POST(request: Request) {
   const { task, payload } = parsed.data;
   const prompt = buildPrompt(task, payload);
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
   try {
-    const upstream = await fetch(`${config.baseUrl}/chat/completions`, {
-      method: "POST",
-      signal: controller.signal,
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${config.apiKey}` },
-      body: JSON.stringify({
-        model: config.model,
+    const { text, model } = await completeText(
+      {
+        system: prompt.system,
+        user: prompt.user,
+        json: true,
         temperature: 0.2,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: prompt.system },
-          { role: "user", content: prompt.user },
-        ],
-      }),
-    });
-
-    if (upstream.status === 429) {
-      return jsonError(
-        429,
-        "rate-limited",
-        "The hosted AI provider is rate limiting requests. Try again later.",
-      );
-    }
-    if (upstream.status === 401 || upstream.status === 403) {
-      return jsonError(
-        502,
-        "upstream-auth",
-        "The hosted AI provider rejected this server's credentials. Check the server configuration.",
-      );
-    }
-    if (!upstream.ok) {
-      return jsonError(
-        502,
-        "upstream-error",
-        `The hosted AI provider returned HTTP ${upstream.status}.`,
-      );
-    }
-    const data = (await upstream.json().catch(() => null)) as {
-      choices?: { message?: { content?: string } }[];
-    } | null;
-    const text = data?.choices?.[0]?.message?.content;
-    if (typeof text !== "string" || text.length === 0) {
-      return jsonError(
-        502,
-        "bad-response",
-        "The hosted AI provider returned an empty or malformed answer.",
-      );
-    }
+        maxTokens: 4096,
+      },
+      { cfg: config, timeoutMs: UPSTREAM_TIMEOUT_MS },
+    );
     // Validate on the server too, so malformed model output never leaves this route as "success".
     try {
-      parseTaskOutput(task, text, config.model);
+      parseTaskOutput(task, text, model);
     } catch (error) {
       const message =
         error instanceof ProviderError
@@ -132,11 +94,7 @@ export async function POST(request: Request) {
     }
     return jsonOk({ text });
   } catch (error) {
-    if ((error as Error).name === "AbortError") {
-      return jsonError(504, "timeout", "The hosted AI provider took too long to answer.");
-    }
-    return jsonError(502, "unreachable", "Could not reach the hosted AI provider.");
-  } finally {
-    clearTimeout(timer);
+    const failure = toAiError(error);
+    return jsonError(failure.status, failure.code, failure.message);
   }
 }

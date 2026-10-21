@@ -3,7 +3,7 @@ import { BookOpenCheck, Layers, ListChecks, Loader2, Square } from "lucide-react
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Button, Card, Field, Notice, Select, useToast } from "@/components/ui/primitives";
-import { ProviderError } from "@/lib/ai/types";
+import { ProviderError, type CallOptions } from "@/lib/ai/types";
 import {
   generateDeckFromDocument,
   generateNoteFromDocument,
@@ -32,6 +32,9 @@ export function GeneratePanel({ doc }: { doc: StudyDocument }) {
   const [difficulty, setDifficulty] = useState<Difficulty>("medium");
   const [types, setTypes] = useState<QuestionType[]>(["mcq", "tf", "short", "fill"]);
   const [cardCount, setCardCount] = useState(15);
+  const [language, setLanguage] = useState("same as source");
+  const [includeExplanations, setIncludeExplanations] = useState(true);
+  const [feedbackMode, setFeedbackMode] = useState<"immediate" | "end">("end");
 
   const disabled = doc.status !== "ready" || busy !== null;
   const providerName =
@@ -41,24 +44,33 @@ export function GeneratePanel({ doc }: { doc: StudyDocument }) {
         ? `Ollama (${settings.ollamaModel})`
         : "hosted AI";
 
+  const [offlineRetry, setOfflineRetry] = useState<(() => void) | null>(null);
+
   async function run<T>(
     label: string,
-    job: (signal: AbortSignal) => Promise<{ item: T; notices: string[] }>,
+    job: (call: CallOptions) => Promise<{ item: T; notices: string[] }>,
     go: (item: T) => string,
+    allowOfflineFallback = false,
   ) {
     const controller = new AbortController();
     abort.current = controller;
     setBusy(label);
     setError(null);
     setNotices([]);
+    setOfflineRetry(null);
     try {
-      const r = await job(controller.signal);
+      const r = await job({ signal: controller.signal, allowOfflineFallback });
       toast(`${label} done.`, "good");
       router.push(go(r.item));
     } catch (e) {
       if (e instanceof ProviderError && e.code === "cancelled")
         setError("Generation was cancelled.");
-      else setError(errorMessage(e));
+      else {
+        setError(errorMessage(e));
+        // Never swap generators silently: offer offline generation as an explicit choice.
+        if (settings.provider !== "offline" && !allowOfflineFallback)
+          setOfflineRetry(() => () => void run(label, job, go, true));
+      }
     } finally {
       setBusy(null);
       abort.current = null;
@@ -78,7 +90,21 @@ export function GeneratePanel({ doc }: { doc: StudyDocument }) {
           This document has no readable text yet, so material cannot be generated.
         </Notice>
       ) : null}
-      {error ? <Notice tone="error">{error}</Notice> : null}
+      {error ? (
+        <Notice tone="error">
+          <span className="block">{error}</span>
+          {offlineRetry ? (
+            <span className="mt-2 block">
+              <Button size="sm" variant="secondary" onClick={offlineRetry}>
+                Generate with offline heuristics instead
+              </Button>
+              <span className="ml-2 text-xs">
+                Offline output is rule-based, not written by an AI model, and is labelled as such.
+              </span>
+            </span>
+          ) : null}
+        </Notice>
+      ) : null}
       {notices.map((n) => (
         <Notice key={n} tone="info">
           {n}
@@ -101,7 +127,7 @@ export function GeneratePanel({ doc }: { doc: StudyDocument }) {
             onClick={() =>
               void run(
                 "Study notes",
-                (signal) => generateNoteFromDocument(doc, { signal }),
+                (call) => generateNoteFromDocument(doc, call),
                 (n) => `/notes/${n.id}`,
               )
             }
@@ -141,6 +167,36 @@ export function GeneratePanel({ doc }: { doc: StudyDocument }) {
               )}
             </Field>
           </div>
+          <Field label="Language">
+            {(id) => (
+              <Select id={id} value={language} onChange={(e) => setLanguage(e.target.value)}>
+                <option value="same as source">Same as the document</option>
+                <option value="English">English</option>
+                <option value="French">French</option>
+                <option value="Modern Standard Arabic">Arabic</option>
+              </Select>
+            )}
+          </Field>
+          <Field label="Show answers">
+            {(id) => (
+              <Select
+                id={id}
+                value={feedbackMode}
+                onChange={(e) => setFeedbackMode(e.target.value as "immediate" | "end")}
+              >
+                <option value="end">After I submit the whole quiz</option>
+                <option value="immediate">After each question</option>
+              </Select>
+            )}
+          </Field>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={includeExplanations}
+              onChange={(e) => setIncludeExplanations(e.target.checked)}
+            />
+            Include explanations
+          </label>
           <fieldset>
             <legend className="mb-1 text-sm font-medium">Question types</legend>
             {(Object.keys(TYPE_LABELS) as QuestionType[]).map((t) => (
@@ -161,7 +217,12 @@ export function GeneratePanel({ doc }: { doc: StudyDocument }) {
             onClick={() =>
               void run(
                 "Quiz",
-                (signal) => generateQuizFromDocument(doc, { count, difficulty, types }, { signal }),
+                (call) =>
+                  generateQuizFromDocument(
+                    doc,
+                    { count, difficulty, types, language, includeExplanations, feedbackMode },
+                    call,
+                  ),
                 (q) => `/quizzes/${q.id}`,
               )
             }
@@ -195,7 +256,7 @@ export function GeneratePanel({ doc }: { doc: StudyDocument }) {
             onClick={() =>
               void run(
                 "Flashcards",
-                (signal) => generateDeckFromDocument(doc, cardCount, { signal }),
+                (call) => generateDeckFromDocument(doc, cardCount, call),
                 (d) => `/flashcards/${d.id}`,
               )
             }

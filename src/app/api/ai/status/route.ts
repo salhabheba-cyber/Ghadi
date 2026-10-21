@@ -4,8 +4,15 @@ import { readHostedConfig } from "@/lib/server/hosted-config";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Reports whether the optional hosted AI route is configured. Never returns any secret. */
+/**
+ * Reports whether the optional hosted AI route is configured, which provider and model, and that it
+ * is cloud-based. Never returns a secret or the base URL.
+ */
 export function GET() {
   const config = readHostedConfig();
-  return jsonOk(config ? { configured: true, model: config.model } : { configured: false });
+  return jsonOk(
+    config
+      ? { configured: true, provider: config.provider, model: config.model, cloud: true }
+      : { configured: false },
+  );
 }

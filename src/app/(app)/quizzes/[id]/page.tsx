@@ -1,24 +1,10 @@
 "use client";
-import {
-  ArrowLeft,
-  BookOpen,
-  CheckCircle2,
-  ChevronDown,
-  ChevronUp,
-  Copy,
-  Download,
-  FileSpreadsheet,
-  FileText,
-  Loader2,
-  Play,
-  Sparkles,
-  Trash2,
-  X,
-} from "lucide-react";
+import { ArrowLeft, CheckCircle2, Copy, Download, Play, Sparkles, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { OriginBadge } from "@/components/origin-badge";
+import { ExportDialog } from "@/components/quiz/export-dialog";
 import { QuizPlayer } from "@/components/quiz/player";
 import { QuizResults } from "@/components/quiz/results";
 import {
@@ -32,6 +18,7 @@ import {
   useToast,
 } from "@/components/ui/primitives";
 import { useLive } from "@/hooks/use-live";
+import { useSettings } from "@/hooks/use-settings";
 import { downloadText, quizToMarkdown, safeFileName } from "@/lib/export";
 import { getDb } from "@/lib/storage/db";
 import { deleteQuiz, duplicateQuiz, getQuiz, saveAttempt } from "@/lib/storage/repo";
@@ -51,66 +38,6 @@ type View =
   | { name: "results"; attempt: QuizAttempt };
 
 type Lang = "en" | "fr" | "ar";
-type ExportFormat = "docx" | "xlsx";
-type ExportContent = "questions-only" | "with-answers" | "answers-only";
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Export helper — only runs when user presses "Generate Export"
-// ─────────────────────────────────────────────────────────────────────────────
-
-interface ExportConfig {
-  format: ExportFormat;
-  content: ExportContent;
-  includeExplanations: boolean;
-  studentFields: boolean;
-}
-
-async function generateExport(quiz: Quiz, cfg: ExportConfig): Promise<void> {
-  const includeAnswers = cfg.content === "with-answers" || cfg.content === "answers-only";
-  const questionsOnly = cfg.content === "answers-only";
-
-  const body = {
-    title: quiz.title,
-    subject: undefined as string | undefined,
-    questions: questionsOnly
-      ? []
-      : quiz.questions.map((q) => ({
-          type: q.type,
-          prompt: q.prompt,
-          options: q.options ?? undefined,
-          correct: q.correct,
-          explanation: cfg.includeExplanations ? (q.explanation ?? undefined) : undefined,
-        })),
-    includeAnswers,
-    includeExplanations: cfg.includeExplanations,
-    studentFields: cfg.studentFields,
-    format: cfg.format,
-  };
-
-  const res = await fetch("/api/quiz/export", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error((err as { message?: string }).message ?? `Export failed (HTTP ${res.status})`);
-  }
-
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = safeFileName(
-    `${quiz.title}_${cfg.content === "answers-only" ? "answer_key" : cfg.content === "with-answers" ? "with_answers" : "student"}`,
-    cfg.format,
-  );
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Choice screen — "Take Exam in Ghadi" vs "Export Exam"
@@ -185,10 +112,10 @@ function ChoiceScreen({
               Download a file to print, share, or use offline
             </p>
             <ul className="mt-3 space-y-1 text-xs text-[var(--muted)]">
-              <li>✓ Word (.docx) or Excel (.xlsx)</li>
-              <li>✓ Student sheet or answer key</li>
-              <li>✓ Optional student name fields</li>
-              <li>✓ Grading table included</li>
+              <li>✓ PDF, Word (.docx) or Excel (.xlsx)</li>
+              <li>✓ Quiz only, with separate key, or key only</li>
+              <li>✓ Optional title, name and date</li>
+              <li>✓ Preview before download</li>
             </ul>
           </div>
         </button>
@@ -196,236 +123,6 @@ function ChoiceScreen({
 
       <p className="text-center text-xs text-[var(--muted)]">
         You can always export later from the quiz overview.
-      </p>
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Export Dialog — format picker + options + explicit generate button
-// ─────────────────────────────────────────────────────────────────────────────
-
-function ExportDialog({
-  quiz,
-  onBack,
-  onSuccess,
-}: {
-  quiz: Quiz;
-  onBack: () => void;
-  onSuccess: () => void;
-}) {
-  const toast = useToast();
-  const [format, setFormat] = useState<ExportFormat>("docx");
-  const [content, setContent] = useState<ExportContent>("questions-only");
-  const [includeExplanations, setIncludeExplanations] = useState(false);
-  const [studentFields, setStudentFields] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
-
-  async function handleGenerate() {
-    setGenerating(true);
-    try {
-      await generateExport(quiz, { format, content, includeExplanations, studentFields });
-      toast("File downloaded.", "good");
-      onSuccess();
-    } catch (e) {
-      toast(errorMessage(e), "error");
-    } finally {
-      setGenerating(false);
-    }
-  }
-
-  const mcqCount = quiz.questions.filter((q) => q.type === "mcq" || q.type === "tf").length;
-  const xlsxSuited = mcqCount > 0;
-
-  return (
-    <div className="space-y-5">
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:underline"
-      >
-        <ArrowLeft className="h-4 w-4" aria-hidden /> Back
-      </button>
-
-      <h1 className="text-xl font-bold">Export Exam</h1>
-      <p className="text-sm text-[var(--muted)]">{quiz.title}</p>
-
-      {/* ── Format picker ── */}
-      <Card className="space-y-3">
-        <h2 className="font-semibold">1. Choose format</h2>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label
-            className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 transition-colors ${
-              format === "docx"
-                ? "border-brand-500 bg-brand-50 dark:bg-brand-900/20"
-                : "border-[var(--border)] hover:border-brand-300"
-            }`}
-          >
-            <input
-              type="radio"
-              name="export-format"
-              value="docx"
-              checked={format === "docx"}
-              onChange={() => setFormat("docx")}
-              className="accent-brand-600"
-            />
-            <div>
-              <div className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-blue-500" aria-hidden />
-                <span className="font-medium">Word (.docx)</span>
-              </div>
-              <p className="mt-0.5 text-xs text-[var(--muted)]">
-                Editable · print-ready · all question types
-              </p>
-            </div>
-          </label>
-
-          <label
-            className={`flex cursor-pointer items-center gap-3 rounded-xl border-2 p-4 transition-colors ${
-              format === "xlsx"
-                ? "border-brand-500 bg-brand-50 dark:bg-brand-900/20"
-                : "border-[var(--border)] hover:border-brand-300"
-            } ${!xlsxSuited ? "opacity-60" : ""}`}
-          >
-            <input
-              type="radio"
-              name="export-format"
-              value="xlsx"
-              checked={format === "xlsx"}
-              onChange={() => setFormat("xlsx")}
-              className="accent-brand-600"
-              aria-describedby={!xlsxSuited ? "xlsx-note" : undefined}
-            />
-            <div>
-              <div className="flex items-center gap-2">
-                <FileSpreadsheet className="h-5 w-5 text-green-600" aria-hidden />
-                <span className="font-medium">Excel (.xlsx)</span>
-              </div>
-              <p className="mt-0.5 text-xs text-[var(--muted)]">
-                MCQ answer sheets · grading tables
-              </p>
-              {!xlsxSuited ? (
-                <p id="xlsx-note" className="mt-0.5 text-xs text-amber-600 dark:text-amber-400">
-                  Best suited for MCQ / True-False exams
-                </p>
-              ) : null}
-            </div>
-          </label>
-        </div>
-      </Card>
-
-      {/* ── Content options ── */}
-      <Card className="space-y-3">
-        <h2 className="font-semibold">2. What to include</h2>
-        <div className="space-y-2">
-          {(
-            [
-              {
-                value: "questions-only",
-                label: "Questions only",
-                desc: "Student exam sheet — no answers",
-              },
-              {
-                value: "with-answers",
-                label: "Questions + answer key",
-                desc: "Both on the same document",
-              },
-              {
-                value: "answers-only",
-                label: "Answer key only",
-                desc: "Correct answers and explanations",
-              },
-            ] as { value: ExportContent; label: string; desc: string }[]
-          ).map((opt) => (
-            <label
-              key={opt.value}
-              className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
-                content === opt.value
-                  ? "border-brand-400 bg-brand-50 dark:bg-brand-900/20"
-                  : "border-[var(--border)] hover:border-brand-300"
-              }`}
-            >
-              <input
-                type="radio"
-                name="export-content"
-                value={opt.value}
-                checked={content === opt.value}
-                onChange={() => setContent(opt.value)}
-                className="mt-0.5 accent-brand-600"
-              />
-              <div>
-                <p className="text-sm font-medium">{opt.label}</p>
-                <p className="text-xs text-[var(--muted)]">{opt.desc}</p>
-              </div>
-            </label>
-          ))}
-        </div>
-      </Card>
-
-      {/* ── Advanced options (collapsible) ── */}
-      <Card className="space-y-3">
-        <button
-          type="button"
-          className="flex w-full items-center justify-between text-sm font-semibold"
-          onClick={() => setAdvancedOpen((v) => !v)}
-          aria-expanded={advancedOpen}
-        >
-          <span>3. More options</span>
-          {advancedOpen ? (
-            <ChevronUp className="h-4 w-4 text-[var(--muted)]" aria-hidden />
-          ) : (
-            <ChevronDown className="h-4 w-4 text-[var(--muted)]" aria-hidden />
-          )}
-        </button>
-
-        {advancedOpen ? (
-          <div className="space-y-3 border-t border-[var(--border)] pt-3">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={includeExplanations}
-                onChange={(e) => setIncludeExplanations(e.target.checked)}
-                className="accent-brand-600"
-              />
-              Include explanations
-              <span className="text-xs text-[var(--muted)]">(where available)</span>
-            </label>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={studentFields}
-                onChange={(e) => setStudentFields(e.target.checked)}
-                className="accent-brand-600"
-              />
-              Add student name / class / date fields
-            </label>
-          </div>
-        ) : null}
-      </Card>
-
-      {/* ── Generate button ── */}
-      <div className="flex flex-wrap gap-3">
-        <Button
-          size="lg"
-          disabled={generating}
-          onClick={() => void handleGenerate()}
-          aria-label={`Generate and download ${format.toUpperCase()} file`}
-        >
-          {generating ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          ) : (
-            <Download className="h-4 w-4" aria-hidden />
-          )}
-          {generating ? "Generating…" : "Generate Export"}
-        </Button>
-        <Button variant="secondary" disabled={generating} onClick={onBack}>
-          <X className="h-4 w-4" aria-hidden /> Cancel
-        </Button>
-      </div>
-
-      <p className="text-xs text-[var(--muted)]">
-        The file is generated and downloaded only when you press &quot;Generate Export&quot;.
-        Nothing is downloaded automatically.
       </p>
     </div>
   );
@@ -441,12 +138,20 @@ function PlaySettings({
   onGoToChoice,
 }: {
   quiz: Quiz;
-  onStart: (opts: { feedback: "immediate" | "end"; aiCheck: boolean; lang: Lang }) => void;
+  onStart: (opts: {
+    feedback: "immediate" | "end";
+    aiCheck: boolean;
+    lang: Lang;
+    timerMin: number;
+  }) => void;
   onGoToChoice: () => void;
 }) {
-  const [feedback, setFeedback] = useState<"immediate" | "end">("immediate");
-  const [aiCheck, setAiCheck] = useState(true);
+  const settings = useSettings();
+  const [feedback, setFeedback] = useState<"immediate" | "end">(quiz.feedbackMode ?? "end");
+  const [aiCheck, setAiCheck] = useState(false);
   const [lang, setLang] = useState<Lang>("en");
+  const [timerMin, setTimerMin] = useState(0);
+  const aiAllowed = settings.provider !== "offline" && settings.hostedConsent;
   const hasFillQuestions = quiz.questions.some((q) => q.type === "fill" || q.type === "short");
 
   return (
@@ -481,19 +186,20 @@ function PlaySettings({
             <label className="flex items-center gap-2 text-sm font-medium">
               <input
                 type="checkbox"
-                checked={aiCheck}
+                checked={aiCheck && aiAllowed}
+                disabled={!aiAllowed}
                 onChange={(e) => setAiCheck(e.target.checked)}
                 className="accent-brand-600"
               />
               <Sparkles className="h-4 w-4 text-brand-500" aria-hidden />
               Use Ghadi AI to check fill-in-blank answers
             </label>
-            {aiCheck ? (
-              <p className="text-xs text-[var(--muted)]">
-                Synonyms and paraphrases are accepted. Requires AI to be configured on this server.
-              </p>
-            ) : null}
-            {aiCheck ? (
+            <p className="text-xs text-[var(--muted)]">
+              {aiAllowed
+                ? "Synonyms and paraphrases are accepted. Each checked answer is sent to your AI provider and may cost money."
+                : "Off. To enable it, choose a cloud or Ollama generator in Settings and allow sending text to it."}
+            </p>
+            {aiCheck && aiAllowed ? (
               <fieldset>
                 <legend className="mb-1 text-xs font-medium text-[var(--muted)]">
                   Feedback language
@@ -518,16 +224,31 @@ function PlaySettings({
         ) : null}
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <Button size="lg" onClick={() => onStart({ feedback, aiCheck, lang })}>
-          <Play className="h-4 w-4" aria-hidden /> Start quiz
-        </Button>
-        <Button
-          variant="secondary"
-          onClick={onGoToChoice}
-          aria-label="Go to exam options: take in Ghadi or export"
+      <label className="flex items-center gap-2 text-sm">
+        Timer
+        <select
+          value={timerMin}
+          onChange={(e) => setTimerMin(Number(e.target.value))}
+          className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-2 py-1"
         >
-          <BookOpen className="h-4 w-4" aria-hidden /> Exam options
+          <option value={0}>No timer</option>
+          {[5, 10, 15, 30, 45, 60].map((m) => (
+            <option key={m} value={m}>
+              {m} minutes
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="flex flex-wrap gap-3">
+        <Button
+          size="lg"
+          onClick={() => onStart({ feedback, aiCheck: aiCheck && aiAllowed, lang, timerMin })}
+        >
+          <Play className="h-4 w-4" aria-hidden /> Take Exam in Ghadi
+        </Button>
+        <Button variant="secondary" onClick={onGoToChoice}>
+          <Download className="h-4 w-4" aria-hidden /> Export Exam
         </Button>
       </div>
     </Card>
@@ -554,7 +275,8 @@ export default function QuizPage() {
     feedback: "immediate" | "end";
     aiCheck: boolean;
     lang: Lang;
-  }>({ feedback: "immediate", aiCheck: false, lang: "en" });
+    timerMin: number;
+  }>({ feedback: "end", aiCheck: false, lang: "en", timerMin: 0 });
   const [saveError, setSaveError] = useState<string | null>(null);
 
   if (loading) return <p className="text-sm text-[var(--muted)]">Loading…</p>;
@@ -604,6 +326,7 @@ export default function QuizPage() {
         feedbackMode={playOpts.feedback}
         aiCheckEnabled={playOpts.aiCheck}
         lang={playOpts.lang}
+        timeLimitMin={playOpts.timerMin || undefined}
         onFinish={(a) => void finish(a)}
         onExit={() => setView({ name: "overview" })}
       />
@@ -652,8 +375,8 @@ export default function QuizPage() {
     return (
       <ExportDialog
         quiz={quiz}
-        onBack={() => setView({ name: "choice" })}
-        onSuccess={() => setView({ name: "overview" })}
+        onBack={() => setView({ name: "overview" })}
+        onSuccess={() => undefined}
       />
     );
   }
@@ -701,6 +424,12 @@ export default function QuizPage() {
       />
 
       <div className="space-y-4">
+        {quiz.tags?.includes("topic-based") ? (
+          <Notice tone="warn">
+            This practice quiz was written from the AI&apos;s general knowledge, not from one of
+            your documents, so it is not source-grounded. Double-check facts that matter.
+          </Notice>
+        ) : null}
         <p className="flex items-center gap-2 text-sm">
           <OriginBadge origin={quiz.origin} />{" "}
           {quiz.documentId ? (
@@ -727,7 +456,7 @@ export default function QuizPage() {
             setPlayOpts(opts);
             setView({ name: "play", quiz: { ...quiz } });
           }}
-          onGoToChoice={() => setView({ name: "choice" })}
+          onGoToChoice={() => setView({ name: "export-dialog" })}
         />
 
         {/* ── Quick export strip (non-disruptive, no auto-download) ── */}

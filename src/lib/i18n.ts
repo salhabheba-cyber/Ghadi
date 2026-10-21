@@ -45,6 +45,9 @@ type Dict = {
   promptNeedsConsent: string;
   promptOffline: string;
   promptAiNotice: string;
+  promptTopicQuiz: string;
+  promptTopicQuizWorking: string;
+  promptTopicQuizNotice: string;
   promptSaveAnswer: string;
   promptThinking: string;
   openSettings: string;
@@ -91,6 +94,10 @@ export const DICTIONARY: Record<Language, Dict> = {
     importFileTitle: "Import your files",
     importPhotosTitle: "Import photos",
     promptTitle: "What do you want to study?",
+    promptTopicQuiz: "Make a practice quiz on this topic",
+    promptTopicQuizWorking: "Making your quiz…",
+    promptTopicQuizNotice:
+      "This quiz comes from the AI's general knowledge, not from one of your documents. Check facts that matter. Using a cloud AI may cost money.",
     promptLabel: "Your prompt",
     promptPlaceholder: "e.g. Explain photosynthesis for a first-year biology exam",
     promptAsk: "Ask Ghadi AI",
@@ -145,6 +152,10 @@ export const DICTIONARY: Record<Language, Dict> = {
     importFileTitle: "Importer vos fichiers",
     importPhotosTitle: "Importer des photos",
     promptTitle: "Que voulez-vous étudier ?",
+    promptTopicQuiz: "Créer un quiz d’entraînement sur ce sujet",
+    promptTopicQuizWorking: "Création du quiz…",
+    promptTopicQuizNotice:
+      "Ce quiz vient des connaissances générales de l’IA, pas d’un de vos documents. Vérifiez les faits importants. Une IA dans le cloud peut être payante.",
     promptLabel: "Votre requête",
     promptPlaceholder: "p. ex. Explique la photosynthèse pour un examen de biologie",
     promptAsk: "Demander à Ghadi IA",
@@ -200,6 +211,10 @@ export const DICTIONARY: Record<Language, Dict> = {
     importFileTitle: "استيراد ملفاتك",
     importPhotosTitle: "استيراد الصور",
     promptTitle: "ماذا تريد أن تدرس؟",
+    promptTopicQuiz: "أنشئ اختبارًا تدريبيًا عن هذا الموضوع",
+    promptTopicQuizWorking: "جارٍ إنشاء الاختبار…",
+    promptTopicQuizNotice:
+      "يعتمد هذا الاختبار على المعرفة العامة للذكاء الاصطناعي وليس على أحد مستنداتك. تحقق من المعلومات المهمة. قد يكون استخدام الذكاء الاصطناعي السحابي مدفوعًا.",
     promptLabel: "نصك التوجيهي",
     promptPlaceholder: "مثال: اشرح عملية البناء الضوئي لامتحان الأحياء",
     promptAsk: "اسأل غدي الذكي",

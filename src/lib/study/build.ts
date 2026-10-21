@@ -72,6 +72,17 @@ export interface FinalizedQuestions {
   questions: Question[];
   /** Drafts that failed validation and were discarded. */
   dropped: number;
+  /** Drafts discarded because they repeated an earlier question. */
+  duplicates: number;
+  /** Drafts discarded because the source passage they cite is not in the source text. */
+  ungrounded: number;
+}
+
+/** True when the cited excerpt really occurs in the source (ignoring case, accents and punctuation). */
+export function excerptInSource(excerpt: string, source: string): boolean {
+  const e = normalizeAnswer(excerpt);
+  if (e.length < 8) return true; // too short to be a meaningful claim
+  return normalizeAnswer(source).includes(e);
 }
 
 /**
@@ -81,10 +92,24 @@ export interface FinalizedQuestions {
 export function finalizeQuestions(
   drafts: QuestionDraft[],
   fallbackDifficulty: Difficulty = "medium",
+  /** When given, questions citing a passage that is not in this text are rejected as ungrounded. */
+  sourceText?: string,
 ): FinalizedQuestions {
   const questions: Question[] = [];
+  const seen = new Set<string>();
   let dropped = 0;
+  let duplicates = 0;
+  let ungrounded = 0;
   for (const d of drafts) {
+    if (sourceText && d.sourceExcerpt && !excerptInSource(d.sourceExcerpt, sourceText)) {
+      ungrounded++;
+      continue;
+    }
+    const key = normalizeAnswer(d.prompt);
+    if (seen.has(key)) {
+      duplicates++;
+      continue;
+    }
     let correct = d.correct.map((c) => c.trim()).filter(Boolean);
     let options = d.options?.map((o) => o.trim()).filter(Boolean);
 
@@ -110,10 +135,12 @@ export function finalizeQuestions(
       tags: [],
       sourceExcerpt: d.sourceExcerpt,
     });
-    if (parsed.success) questions.push(parsed.data);
-    else dropped++;
+    if (parsed.success) {
+      seen.add(key);
+      questions.push(parsed.data);
+    } else dropped++;
   }
-  return { questions, dropped };
+  return { questions, dropped, duplicates, ungrounded };
 }
 
 export function buildQuiz(args: {
@@ -124,6 +151,9 @@ export function buildQuiz(args: {
   difficulty: Difficulty;
   language: string;
   questions: Question[];
+  includeExplanations?: boolean;
+  feedbackMode?: "immediate" | "end";
+  tags?: string[];
 }): Quiz {
   const now = nowIso();
   return quizSchema.parse({
@@ -134,8 +164,13 @@ export function buildQuiz(args: {
     origin: args.origin,
     difficulty: args.difficulty,
     language: args.language,
-    questions: args.questions,
-    tags: [],
+    includeExplanations: args.includeExplanations ?? true,
+    feedbackMode: args.feedbackMode ?? "end",
+    questions:
+      args.includeExplanations === false
+        ? args.questions.map((q) => ({ ...q, explanation: "" }))
+        : args.questions,
+    tags: args.tags ?? [],
     createdAt: now,
     updatedAt: now,
   });

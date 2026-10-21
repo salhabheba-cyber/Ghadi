@@ -8,7 +8,7 @@
  *  - Everything else                                       → network-first
  */
 
-const CACHE_VERSION = "ghadi-v3";
+const CACHE_VERSION = "ghadi-v4";
 const STATIC_CACHE  = `${CACHE_VERSION}-static`;
 const PAGE_CACHE    = `${CACHE_VERSION}-pages`;
 

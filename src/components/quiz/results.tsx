@@ -95,7 +95,7 @@ export function QuizResults({
                     <strong>{q.correct.join(" / ")}</strong>
                   </p>
                 ) : null}
-                {q.explanation ? (
+                {q.explanation && quiz.includeExplanations !== false ? (
                   <p className="text-sm text-[var(--muted)]" dir="auto">
                     {q.explanation}
                   </p>

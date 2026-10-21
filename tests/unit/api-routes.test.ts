@@ -13,6 +13,9 @@ const HOSTED_ENV = {
   GHADI_HOSTED_AI_MODEL: "model-x",
 };
 
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
 const req = (path: string, body: unknown, headers: Record<string, string> = {}, raw = false) =>
   new Request(`http://ghadi.test${path}`, {
     method: "POST",
@@ -42,7 +45,12 @@ describe("GET /api/ai/status", () => {
   it("reports only the model label when configured", async () => {
     for (const [k, v] of Object.entries(HOSTED_ENV)) vi.stubEnv(k, v);
     const text = JSON.stringify(await (statusGet() as Response).json());
-    expect(JSON.parse(text)).toEqual({ configured: true, model: "model-x" });
+    expect(JSON.parse(text)).toEqual({
+      configured: true,
+      provider: "openai-compatible",
+      model: "model-x",
+      cloud: true,
+    });
     expect(text).not.toContain(SECRET);
     expect(text).not.toContain("llm.example.test");
   });
@@ -90,13 +98,10 @@ describe("POST /api/ai/generate", () => {
 
   it("builds the prompt itself, sends the key only upstream, and never forwards client-supplied prompts", async () => {
     configure();
-    const fetchMock = vi.fn(
-      async (..._a: unknown[]) =>
-        new Response(
-          JSON.stringify({
-            choices: [{ message: { content: JSON.stringify({ text: "A short summary." }) } }],
-          }),
-        ),
+    const fetchMock = vi.fn(async (..._a: unknown[]) =>
+      json({
+        choices: [{ message: { content: JSON.stringify({ text: "A short summary." }) } }],
+      }),
     );
     vi.stubGlobal("fetch", fetchMock);
     const injected = {
@@ -113,8 +118,8 @@ describe("POST /api/ai/generate", () => {
     expect(out).not.toContain(SECRET);
 
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("https://llm.example.test/v1/chat/completions");
-    expect((init.headers as Record<string, string>).Authorization).toBe(`Bearer ${SECRET}`);
+    expect(String(url)).toBe("https://llm.example.test/v1/chat/completions");
+    expect(new Headers(init.headers).get("authorization")).toBe(`Bearer ${SECRET}`);
     const sent = JSON.parse(init.body as string);
     expect(sent.model).toBe("model-x");
     expect(JSON.stringify(sent)).not.toMatch(/EVIL|IGNORE ALL RULES|attacker-model/);
@@ -124,10 +129,8 @@ describe("POST /api/ai/generate", () => {
 
   it("does not report success for malformed model output", async () => {
     configure();
-    vi.stubGlobal(
-      "fetch",
-      async () =>
-        new Response(JSON.stringify({ choices: [{ message: { content: "not json at all" } }] })),
+    vi.stubGlobal("fetch", async () =>
+      json({ choices: [{ message: { content: "not json at all" } }] }),
     );
     const res = await generatePost(req("/api/ai/generate", goodSummaryBody));
     expect(res.status).toBe(502);
@@ -136,14 +139,16 @@ describe("POST /api/ai/generate", () => {
 
   it("maps upstream failures without exposing credentials", async () => {
     configure();
-    vi.stubGlobal("fetch", async () => new Response(`bad key ${SECRET}`, { status: 401 }));
+    vi.stubGlobal("fetch", async () =>
+      json({ error: { message: `bad key ${SECRET}`, code: "invalid_api_key" } }, 401),
+    );
     const res = await generatePost(req("/api/ai/generate", goodSummaryBody));
     const text = await res.text();
     expect(res.status).toBe(502);
-    expect(text).toContain("upstream-auth");
+    expect(text).toContain("invalid-key");
     expect(text).not.toContain(SECRET);
 
-    vi.stubGlobal("fetch", async () => new Response("slow down", { status: 429 }));
+    vi.stubGlobal("fetch", async () => json({ error: { message: "slow down" } }, 429));
     expect((await generatePost(req("/api/ai/generate", goodSummaryBody))).status).toBe(429);
     vi.stubGlobal("fetch", async () => {
       throw new TypeError("network down");
@@ -154,12 +159,8 @@ describe("POST /api/ai/generate", () => {
   it("rate-limits per client (behind a trusted proxy)", async () => {
     configure();
     vi.stubEnv("GHADI_TRUST_PROXY", "true");
-    vi.stubGlobal(
-      "fetch",
-      async () =>
-        new Response(
-          JSON.stringify({ choices: [{ message: { content: JSON.stringify({ text: "ok" }) } }] }),
-        ),
+    vi.stubGlobal("fetch", async () =>
+      json({ choices: [{ message: { content: JSON.stringify({ text: "ok" }) } }] }),
     );
     const headers = { "x-forwarded-for": "203.0.113.9" };
     for (let i = 0; i < 10; i++)

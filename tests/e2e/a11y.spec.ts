@@ -46,7 +46,8 @@ for (const theme of ["light", "dark"] as const) {
     await page.getByRole("button", { name: "Generate quiz" }).click();
     await page.waitForURL(/\/quizzes\//);
     await scan(page, "quiz overview");
-    await page.getByRole("button", { name: "Start quiz" }).click();
+    await page.getByLabel("After each question").check();
+    await page.getByRole("button", { name: "Take Exam in Ghadi" }).click();
     await page.getByRole("radio").first().check();
     await page.getByRole("button", { name: "Check answer" }).click();
     await scan(page, "quiz player");
