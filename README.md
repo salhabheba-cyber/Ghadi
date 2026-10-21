@@ -20,6 +20,7 @@ Ghadi runs as a Next.js app. All your data lives in your browser's IndexedDB. Th
 - **Flashcards** with a transparent SM-2-inspired scheduler (Known / Difficult / Forgotten), keyboard-driven review (Space to flip, 1/2/3 to rate), manual cards and generated decks.
 - **Dashboard** computed only from your real activity: streak, quiz accuracy, due and mature cards, upcoming reviews, review history, quiz scores over time. Empty states instead of fake numbers.
 - **Library**: search, sort, filter by type/collection/tag, collections, tags, bulk delete.
+- **Home screen**: Attach File, Paste URL, Attach Photos and Prompt all open real import flows (validated, extracted on your device, saved, then ready for notes, quizzes and flashcards). Interface language switches between English, French and Arabic (right-to-left); the home screen, main menu and prompt dialog are translated, other pages are still English. XP and coins are derived from your saved history: XP = 1 per flashcard review + 1 per correct quiz answer; coins = 1 per completed quiz + 1 per study day. The Prompt dialog needs the optional hosted AI plus your consent in Settings; otherwise it can save your own text as a document.
 - **Backup & restore** (versioned JSON, validated before anything is touched), Markdown / CSV export, print styles.
 - Light and dark themes, responsive layout, keyboard accessible, automatically scanned with axe (WCAG 2 A/AA) in CI.
 

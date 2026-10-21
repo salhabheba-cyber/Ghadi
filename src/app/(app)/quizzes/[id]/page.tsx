@@ -320,9 +320,21 @@ function ExportDialog({
         <div className="space-y-2">
           {(
             [
-              { value: "questions-only", label: "Questions only", desc: "Student exam sheet — no answers" },
-              { value: "with-answers", label: "Questions + answer key", desc: "Both on the same document" },
-              { value: "answers-only", label: "Answer key only", desc: "Correct answers and explanations" },
+              {
+                value: "questions-only",
+                label: "Questions only",
+                desc: "Student exam sheet — no answers",
+              },
+              {
+                value: "with-answers",
+                label: "Questions + answer key",
+                desc: "Both on the same document",
+              },
+              {
+                value: "answers-only",
+                label: "Answer key only",
+                desc: "Correct answers and explanations",
+              },
             ] as { value: ExportContent; label: string; desc: string }[]
           ).map((opt) => (
             <label
@@ -412,8 +424,8 @@ function ExportDialog({
       </div>
 
       <p className="text-xs text-[var(--muted)]">
-        The file is generated and downloaded only when you press "Generate Export". Nothing is
-        downloaded automatically.
+        The file is generated and downloaded only when you press &quot;Generate Export&quot;.
+        Nothing is downloaded automatically.
       </p>
     </div>
   );
@@ -537,6 +549,12 @@ export default function QuizPage() {
     [id],
   );
   const [view, setView] = useState<View>({ name: "overview" });
+  // Options chosen on the play-settings card; AI answer-checking stays off unless the user ticks it.
+  const [playOpts, setPlayOpts] = useState<{
+    feedback: "immediate" | "end";
+    aiCheck: boolean;
+    lang: Lang;
+  }>({ feedback: "immediate", aiCheck: false, lang: "en" });
   const [saveError, setSaveError] = useState<string | null>(null);
 
   if (loading) return <p className="text-sm text-[var(--muted)]">Loading…</p>;
@@ -583,9 +601,9 @@ export default function QuizPage() {
     return (
       <QuizPlayer
         quiz={view.quiz}
-        feedbackMode={"immediate"}
-        aiCheckEnabled={true}
-        lang="en"
+        feedbackMode={playOpts.feedback}
+        aiCheckEnabled={playOpts.aiCheck}
+        lang={playOpts.lang}
         onFinish={(a) => void finish(a)}
         onExit={() => setView({ name: "overview" })}
       />
@@ -705,9 +723,10 @@ export default function QuizPage() {
         {/* ── Play settings + Exam options ── */}
         <PlaySettings
           quiz={quiz}
-          onStart={({ feedback, aiCheck, lang }) =>
-            setView({ name: "play", quiz: { ...quiz } })
-          }
+          onStart={(opts) => {
+            setPlayOpts(opts);
+            setView({ name: "play", quiz: { ...quiz } });
+          }}
           onGoToChoice={() => setView({ name: "choice" })}
         />
 
@@ -719,10 +738,7 @@ export default function QuizPage() {
               Download a Word or Excel file to print or share.
             </p>
           </div>
-          <Button
-            variant="secondary"
-            onClick={() => setView({ name: "export-dialog" })}
-          >
+          <Button variant="secondary" onClick={() => setView({ name: "export-dialog" })}>
             <Download className="h-4 w-4" aria-hidden /> Export options
           </Button>
         </Card>

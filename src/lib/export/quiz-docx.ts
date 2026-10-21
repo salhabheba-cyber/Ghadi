@@ -10,11 +10,6 @@ import {
   HeadingLevel,
   AlignmentType,
   BorderStyle,
-  Table,
-  TableRow,
-  TableCell,
-  WidthType,
-  ShadingType,
 } from "docx";
 
 export interface ExportQuestion {
@@ -35,7 +30,10 @@ export interface QuizExportData {
 
 const BRAND_COLOR = "7C3AED"; // Ghadi purple
 
-function makeHeading(text: string, level: (typeof HeadingLevel)[keyof typeof HeadingLevel] = HeadingLevel.HEADING_1) {
+function makeHeading(
+  text: string,
+  level: (typeof HeadingLevel)[keyof typeof HeadingLevel] = HeadingLevel.HEADING_1,
+) {
   return new Paragraph({
     heading: level,
     children: [new TextRun({ text, bold: true, color: BRAND_COLOR })],
@@ -56,7 +54,9 @@ function makeQuestionBlock(q: ExportQuestion, idx: number, includeAnswers: boole
       children: [
         new TextRun({ text: `${idx + 1}. `, bold: true }),
         new TextRun({ text: q.prompt }),
-        prefix ? new TextRun({ text: `  [${prefix}]`, italics: true, color: "888888" }) : new TextRun(""),
+        prefix
+          ? new TextRun({ text: `  [${prefix}]`, italics: true, color: "888888" })
+          : new TextRun(""),
       ],
       spacing: { before: 200 },
     }),
@@ -66,7 +66,9 @@ function makeQuestionBlock(q: ExportQuestion, idx: number, includeAnswers: boole
   if (q.type === "fill" || q.type === "short") {
     blocks.push(
       new Paragraph({
-        children: [new TextRun({ text: "Answer: _______________________________________________" })],
+        children: [
+          new TextRun({ text: "Answer: _______________________________________________" }),
+        ],
         indent: { left: 400 },
       }),
     );

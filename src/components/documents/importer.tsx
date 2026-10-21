@@ -1,6 +1,6 @@
 "use client";
 import { ClipboardPaste, FileUp, Globe, Loader2 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isBundledOcrLanguage } from "@/lib/document-processing/ocr";
 import {
   Button,
@@ -28,11 +28,27 @@ import {
 import { saveDocument } from "@/lib/storage/repo";
 import { cn, errorMessage } from "@/lib/utils";
 
-type Tab = "file" | "paste" | "url";
+export type Tab = "file" | "paste" | "url";
 
-export function Importer({ onImported }: { onImported: (docId: string) => void }) {
+export function Importer({
+  onImported,
+  initialTab = "file",
+  initialFiles,
+  accept = FILE_INPUT_ACCEPT,
+  hideTabs = false,
+}: {
+  onImported: (docId: string) => void;
+  /** Which import method is shown first. */
+  initialTab?: Tab;
+  /** Files already chosen by the user (e.g. from the home screen); processed once on mount. */
+  initialFiles?: File[];
+  /** File-picker accept filter (e.g. images only). */
+  accept?: string;
+  /** Hide the method tabs when the caller already chose one. */
+  hideTabs?: boolean;
+}) {
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>("file");
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -88,6 +104,14 @@ export function Importer({ onImported }: { onImported: (docId: string) => void }
     }
   }
 
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (startedRef.current || !initialFiles?.length) return;
+    startedRef.current = true;
+    void handleFiles(initialFiles);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const tabs: { id: Tab; label: string; icon: typeof FileUp }[] = [
     { id: "file", label: "Upload file", icon: FileUp },
     { id: "paste", label: "Paste text", icon: ClipboardPaste },
@@ -96,7 +120,12 @@ export function Importer({ onImported }: { onImported: (docId: string) => void }
 
   return (
     <Card>
-      <div role="tablist" aria-label="Import method" className="mb-4 flex flex-wrap gap-1">
+      <div
+        role="tablist"
+        aria-label="Import method"
+        hidden={hideTabs}
+        className="mb-4 flex flex-wrap gap-1"
+      >
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -158,7 +187,7 @@ export function Importer({ onImported }: { onImported: (docId: string) => void }
               ref={fileRef}
               type="file"
               multiple
-              accept={FILE_INPUT_ACCEPT}
+              accept={accept}
               aria-label="Choose files to import"
               data-testid="file-input"
               className="sr-only"

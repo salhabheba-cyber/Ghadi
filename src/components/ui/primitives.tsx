@@ -207,20 +207,30 @@ export function Dialog({
   onClose,
   title,
   children,
+  size = "md",
 }: {
   open: boolean;
   onClose: () => void;
   title: string;
   children: ReactNode;
+  size?: "md" | "lg";
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
+  // Keep the latest onClose in a ref so callers may pass an inline function without the effect below
+  // re-running (which would move focus back to the first control after every keystroke).
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
-    ref.current?.querySelector<HTMLElement>("button, input, textarea, select")?.focus();
+    ref.current
+      ?.querySelector<HTMLElement>("input:not([hidden]), textarea, select, button")
+      ?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
       if (e.key === "Tab" && ref.current) {
         const items = ref.current.querySelectorAll<HTMLElement>(
           "button, input, textarea, select, a[href]",
@@ -242,7 +252,7 @@ export function Dialog({
       document.removeEventListener("keydown", onKey);
       prev?.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return (
     <div
@@ -254,7 +264,10 @@ export function Dialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="w-full max-w-md rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 shadow-xl"
+        className={cn(
+          "max-h-[90dvh] w-full overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5 text-[var(--text)] shadow-xl",
+          size === "lg" ? "max-w-2xl" : "max-w-md",
+        )}
       >
         <div className="mb-3 flex items-start justify-between gap-2">
           <h2 id={titleId} className="text-lg font-semibold">

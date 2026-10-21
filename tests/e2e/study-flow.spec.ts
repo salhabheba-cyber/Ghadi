@@ -13,11 +13,13 @@ async function importFixture(page: Page) {
 }
 
 test.describe("Ghadi core study flow (offline, no AI key)", () => {
-  test("landing page tells the honest story and opens the app", async ({ page }) => {
+  test("home screen opens the app's real pages", async ({ page }) => {
     await page.goto("/");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Learn Smarter");
-    await expect(page.getByText("offline heuristics", { exact: false }).first()).toBeVisible();
-    await page.getByRole("link", { name: "Open Ghadi" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("study");
+    await page
+      .getByRole("navigation", { name: "Main" })
+      .getByRole("link", { name: "Progress" })
+      .click();
     await expect(page).toHaveURL(/\/dashboard$/);
     // Fresh profile: no fake data.
     await expect(page.getByText("Welcome to Ghadi")).toBeVisible();

@@ -1,0 +1,439 @@
+/* Ghadi home screen. Every rule is prefixed .gh- so nothing leaks into other pages. */
+body:has(.gh-home) {
+  background: #7c3aed;
+}
+
+.gh-home {
+  --gh-deep: #4c1d95;
+  --gh-main: #7c3aed;
+  --gh-ink: #1e1030;
+  --gh-mid: #6b5c8a;
+  --gh-card: rgba(255, 255, 255, 0.96);
+  --gh-shadow: 0 12px 32px rgba(76, 29, 149, 0.22), 0 2px 8px rgba(76, 29, 149, 0.1);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: clip;
+  color: #fff;
+  background: linear-gradient(170deg, #5b21b6 0%, #7c3aed 35%, #8b5cf6 65%, #a78bfa 100%);
+  font-family:
+    ui-rounded,
+    Nunito,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+.gh-home *,
+.gh-home *::before,
+.gh-home *::after {
+  box-sizing: border-box;
+}
+.gh-home ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.gh-home a {
+  color: inherit;
+  text-decoration: none;
+}
+.gh-home button {
+  font: inherit;
+}
+
+.gh-orbs {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.gh-orbs span {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+}
+.gh-orbs span:nth-child(1) {
+  width: 90px;
+  height: 90px;
+  inset-inline-start: 6%;
+  bottom: -10%;
+  background: rgba(196, 181, 253, 0.2);
+  animation: gh-float 16s linear infinite;
+}
+.gh-orbs span:nth-child(2) {
+  width: 46px;
+  height: 46px;
+  inset-inline-start: 74%;
+  bottom: -6%;
+  background: rgba(249, 168, 212, 0.18);
+  animation: gh-float 12s linear 2s infinite;
+}
+.gh-orbs span:nth-child(3) {
+  width: 130px;
+  height: 130px;
+  inset-inline-start: 40%;
+  bottom: -16%;
+  animation: gh-float 22s linear 1s infinite;
+}
+.gh-orbs span:nth-child(4) {
+  width: 34px;
+  height: 34px;
+  inset-inline-start: 88%;
+  bottom: -5%;
+  background: rgba(253, 224, 71, 0.16);
+  animation: gh-float 14s linear 5s infinite;
+}
+.gh-orbs span:nth-child(5) {
+  width: 64px;
+  height: 64px;
+  inset-inline-start: 22%;
+  bottom: -8%;
+  background: rgba(249, 168, 212, 0.14);
+  animation: gh-float 19s linear 7s infinite;
+}
+.gh-orbs span:nth-child(6) {
+  width: 52px;
+  height: 52px;
+  inset-inline-start: 58%;
+  bottom: -7%;
+  background: rgba(196, 181, 253, 0.18);
+  animation: gh-float 17s linear 3s infinite;
+}
+@keyframes gh-float {
+  to {
+    transform: translateY(-120vh);
+  }
+}
+
+.gh-main {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+}
+.gh-wrap {
+  width: 100%;
+  max-width: 560px;
+  margin-inline: auto;
+  padding-inline: max(16px, env(safe-area-inset-left, 0px))
+    max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* Top bar */
+.gh-topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-block: 14px 6px;
+}
+.gh-gear {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(12px);
+}
+.gh-gear svg {
+  width: 22px;
+  height: 22px;
+  stroke: #fff;
+}
+.gh-langs {
+  display: flex;
+  gap: 4px;
+}
+.gh-lang {
+  min-width: 44px;
+  min-height: 36px;
+  padding: 4px 10px;
+  border-radius: 14px;
+  cursor: pointer;
+  font-weight: 800;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+}
+.gh-lang[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.32);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.6);
+}
+.gh-counters {
+  display: flex;
+  gap: 6px;
+}
+.gh-pill {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 36px;
+  padding: 3px 12px 3px 6px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  font-weight: 800;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.gh-coin {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: radial-gradient(circle at 35% 35%, #fff9c4, #f59e0b 55%, #d97706);
+  border: 2.5px solid #fde047;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.55);
+}
+
+/* Hero */
+.gh-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-block: 10px 16px;
+  text-align: center;
+}
+.gh-speech {
+  position: relative;
+  margin: 0;
+  padding: 7px 16px;
+  border-radius: 16px;
+  background: #fff;
+  color: var(--gh-main);
+  font-weight: 800;
+  font-size: 13px;
+  box-shadow: 0 4px 18px rgba(76, 29, 149, 0.18);
+}
+.gh-speech::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: 50%;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  background: #fff;
+  transform: translateX(-50%) rotate(45deg);
+}
+.gh-mascot {
+  display: block;
+  width: clamp(112px, 34vw, 168px);
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 28%;
+  border: 4px solid rgba(255, 255, 255, 0.85);
+  filter: drop-shadow(0 18px 24px rgba(76, 29, 149, 0.35));
+}
+.gh-heading {
+  margin: 4px 0 0;
+  font-size: clamp(18px, 5vw, 24px);
+  font-weight: 900;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+/* Action cards */
+.gh-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.gh-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 128px;
+  padding: 14px 10px;
+  border-radius: 24px;
+  cursor: pointer;
+  background: var(--gh-card);
+  color: var(--gh-ink);
+  border: 1.5px solid rgba(255, 255, 255, 0.92);
+  box-shadow: var(--gh-shadow);
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 0.15s,
+    box-shadow 0.15s;
+}
+.gh-card img {
+  width: 64px;
+  height: 64px;
+  max-width: 100%;
+}
+.gh-card span {
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1.2;
+  text-align: center;
+  text-wrap: balance;
+}
+.gh-card:active {
+  transform: scale(0.95);
+}
+.gh-card:focus-visible,
+.gh-quick a:focus-visible,
+.gh-nav-item:focus-visible,
+.gh-lang:focus-visible,
+.gh-gear:focus-visible {
+  outline: 3px solid #fde047;
+  outline-offset: 2px;
+}
+
+/* Quick links */
+.gh-quick {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+.gh-home .gh-quick a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  font-weight: 800;
+  font-size: 13px;
+}
+.gh-quick svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Bottom navigation (fixed; .gh-main reserves its height so content is never covered) */
+.gh-nav {
+  position: fixed;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 20;
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(22px);
+  border-top: 1px solid rgba(124, 58, 237, 0.12);
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -4px 28px rgba(76, 29, 149, 0.12);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.gh-nav-inner {
+  display: flex;
+  max-width: 560px;
+  margin-inline: auto;
+  padding: 6px 8px;
+}
+.gh-nav-inner li {
+  flex: 1;
+  min-width: 0;
+}
+.gh-home .gh-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+  padding: 4px 2px;
+  border-radius: 14px;
+  color: var(--gh-mid);
+  font-weight: 800;
+  font-size: 11px;
+  text-align: center;
+}
+.gh-nav-item svg {
+  width: 24px;
+  height: 24px;
+}
+.gh-nav-item span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gh-home .gh-nav-item.is-active {
+  color: var(--gh-main);
+  background: rgba(124, 58, 237, 0.08);
+}
+
+@media (min-width: 768px) {
+  .gh-wrap,
+  .gh-nav-inner {
+    max-width: 760px;
+  }
+  .gh-cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Motion: only when the user has not asked to reduce it. */
+@media (prefers-reduced-motion: no-preference) {
+  .gh-mascot {
+    animation: gh-bob 3.6s ease-in-out infinite;
+  }
+  .gh-card {
+    animation: gh-rise 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+  .gh-cards li:nth-child(2) .gh-card {
+    animation-delay: 0.08s;
+  }
+  .gh-cards li:nth-child(3) .gh-card {
+    animation-delay: 0.16s;
+  }
+  .gh-cards li:nth-child(4) .gh-card {
+    animation-delay: 0.24s;
+  }
+  .gh-speech {
+    animation: gh-pop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+}
+@keyframes gh-bob {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+}
+@keyframes gh-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes gh-pop {
+  from {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gh-orbs span {
+    animation: none !important;
+    display: none;
+  }
+}

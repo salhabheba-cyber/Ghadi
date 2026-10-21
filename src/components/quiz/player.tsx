@@ -44,14 +44,34 @@ function GhadiFeedback({
           <circle cx="48" cy="27" r="2.5" fill="#1a1a2e" />
           {/* smile or sad mouth */}
           {correct === false ? (
-            <path d="M33 35 Q40 31 47 35" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" />
+            <path
+              d="M33 35 Q40 31 47 35"
+              stroke="white"
+              strokeWidth="2"
+              fill="none"
+              strokeLinecap="round"
+            />
           ) : (
-            <path d="M33 33 Q40 39 47 33" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round" />
+            <path
+              d="M33 33 Q40 39 47 33"
+              stroke="white"
+              strokeWidth="2"
+              fill="none"
+              strokeLinecap="round"
+            />
           )}
           {/* graduation cap */}
           <rect x="24" y="11" width="32" height="5" rx="2" fill="#4C1D95" />
           <polygon points="40,4 28,11 52,11" fill="#4C1D95" />
-          <line x1="52" y1="11" x2="56" y2="18" stroke="#FCD34D" strokeWidth="2" strokeLinecap="round" />
+          <line
+            x1="52"
+            y1="11"
+            x2="56"
+            y2="18"
+            stroke="#FCD34D"
+            strokeWidth="2"
+            strokeLinecap="round"
+          />
           <circle cx="56" cy="19" r="2" fill="#FCD34D" />
         </svg>
       </div>
@@ -320,10 +340,16 @@ export function QuizPlayer({
         {/* AI check error */}
         {useAi && aiState.error ? (
           <Notice tone="error">
-            <span className="font-medium">Ghadi couldn't check this answer:</span> {aiState.error}.
+            <span className="font-medium">Ghadi couldn&apos;t check this answer:</span>{" "}
+            {aiState.error}.
             <button
               className="ml-2 underline"
-              onClick={() => setAiChecks((prev) => ({ ...prev, [q.id]: { loading: false, result: null, error: null } }))}
+              onClick={() =>
+                setAiChecks((prev) => ({
+                  ...prev,
+                  [q.id]: { loading: false, result: null, error: null },
+                }))
+              }
             >
               Try again
             </button>

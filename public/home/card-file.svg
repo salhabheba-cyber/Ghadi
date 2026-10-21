@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72" fill="none">
+          <rect x="8" y="24" width="56" height="36" rx="7" fill="#5B21B6"/>
+          <path d="M8 30 L8 24 Q8 20 12 20 L28 20 L34 26 L64 26 Q68 26 68 30Z" fill="#6D28D9"/>
+          <rect x="8" y="30" width="56" height="30" rx="6" fill="#7C3AED"/>
+          <rect x="12" y="32" width="30" height="4" rx="2" fill="rgba(255,255,255,0.22)"/>
+          <rect x="16" y="40" width="40" height="5" rx="2" fill="rgba(255,255,255,0.32)"/>
+          <rect x="16" y="48" width="30" height="5" rx="2" fill="rgba(255,255,255,0.22)"/>
+          <!-- Daisy sticker -->
+          <circle cx="52" cy="44" r="5" fill="#FDE047"/>
+          <circle cx="52" cy="38.5" r="2.5" fill="#FDE047"/>
+          <circle cx="52" cy="49.5" r="2.5" fill="#FDE047"/>
+          <circle cx="46.5" cy="44" r="2.5" fill="#FDE047"/>
+          <circle cx="57.5" cy="44" r="2.5" fill="#FDE047"/>
+          <circle cx="52" cy="44" r="3.5" fill="#F59E0B"/>
+        </svg>

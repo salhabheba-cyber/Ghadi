@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
+import { LanguageSync } from "@/components/language-sync";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 import "./globals.css";
 
@@ -49,6 +50,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           Skip to content
         </a>
         {children}
+        <LanguageSync />
         <ServiceWorkerRegistration />
       </body>
     </html>

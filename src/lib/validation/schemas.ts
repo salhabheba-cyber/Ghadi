@@ -298,6 +298,8 @@ export const settingsSchema = z.object({
   /** User has explicitly agreed to send document content to the hosted provider. */
   hostedConsent: z.boolean().default(false),
   dailyGoalCards: z.number().int().min(1).max(500).default(20),
+  /** Interface language. English, French or Modern Standard Arabic (right-to-left). */
+  uiLanguage: z.enum(["en", "fr", "ar"]).default("en"),
 });
 export type Settings = z.infer<typeof settingsSchema>;
 

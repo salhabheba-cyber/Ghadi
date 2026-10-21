@@ -102,6 +102,7 @@ describe("storage repository", () => {
         ollamaEndpoint: "x",
         ollamaModel: "m",
         hostedConsent: false,
+        uiLanguage: "en",
         dailyGoalCards: 0,
       }),
     ).rejects.toThrow(/Invalid settings/);

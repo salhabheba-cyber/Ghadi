@@ -16,24 +16,35 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/hooks/use-language";
 import { UiProvider, Notice } from "@/components/ui/primitives";
 import { isStorageAvailable } from "@/lib/storage/db";
 import { Wordmark } from "./logo";
 import { ThemeToggle } from "./theme-toggle";
 
-const NAV = [
-  { href: "/dashboard", label: "Dashboard", icon: BarChart3 },
-  { href: "/library", label: "My Library", icon: Library },
-  { href: "/documents", label: "Documents", icon: FileText },
-  { href: "/notes", label: "Study Notes", icon: NotebookPen },
-  { href: "/quizzes", label: "Quizzes", icon: ListChecks },
-  { href: "/flashcards", label: "Flashcards", icon: Layers },
-  { href: "/review", label: "Review", icon: Brain },
-  { href: "/settings", label: "Settings", icon: Settings },
-] as const;
+type NavKey =
+  | "dashboard"
+  | "library"
+  | "documents"
+  | "notes"
+  | "quizzes"
+  | "flashcards"
+  | "review"
+  | "settings";
+const NAV: { href: string; key: NavKey; icon: typeof BarChart3 }[] = [
+  { href: "/dashboard", key: "dashboard", icon: BarChart3 },
+  { href: "/library", key: "library", icon: Library },
+  { href: "/documents", key: "documents", icon: FileText },
+  { href: "/notes", key: "notes", icon: NotebookPen },
+  { href: "/quizzes", key: "quizzes", icon: ListChecks },
+  { href: "/flashcards", key: "flashcards", icon: Layers },
+  { href: "/review", key: "review", icon: Brain },
+  { href: "/settings", key: "settings", icon: Settings },
+];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const { t } = useLanguage();
   // The mobile menu is "open" only for the page it was opened on, so navigating closes it.
   const [openOn, setOpenOn] = useState<string | null>(null);
   const open = openOn === pathname;
@@ -45,8 +56,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 
   const nav = (
-    <nav aria-label="Main" className="flex flex-col gap-1">
-      {NAV.map(({ href, label, icon: Icon }) => {
+    <nav aria-label={t.mainNav} className="flex flex-col gap-1">
+      {NAV.map(({ href, key, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
@@ -61,7 +72,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           >
             <Icon className="h-4 w-4" aria-hidden />
-            {label}
+            {t[key]}
           </Link>
         );
       })}
