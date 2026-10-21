@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { LanguageSync } from "@/components/language-sync";
+import { ICONS } from "@/lib/brand";
 import { ServiceWorkerRegistration } from "@/components/service-worker-registration";
 import "./globals.css";
 
@@ -8,6 +9,7 @@ export const metadata: Metadata = {
   title: { default: "Ghadi — Learn Smarter. Remember More. Stay Free.", template: "%s · Ghadi" },
   description:
     "Ghadi is a free, open-source, local-first study platform: turn your documents into notes, quizzes and flashcards. Your data stays in your browser.",
+  applicationName: "Ghadi",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
@@ -16,12 +18,12 @@ export const metadata: Metadata = {
   },
   icons: {
     icon: [
-      { url: "/icons/icon-16x16.png", sizes: "16x16", type: "image/png" },
-      { url: "/icons/icon-32x32.png", sizes: "32x32", type: "image/png" },
-      { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
+      { url: ICONS.favicon16, sizes: "16x16", type: "image/png" },
+      { url: ICONS.favicon32, sizes: "32x32", type: "image/png" },
+      { url: ICONS.any192, sizes: "192x192", type: "image/png" },
+      { url: ICONS.any512, sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: ICONS.apple180, sizes: "180x180", type: "image/png" }],
   },
 };
 export const viewport: Viewport = {

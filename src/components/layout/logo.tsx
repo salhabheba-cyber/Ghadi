@@ -1,3 +1,4 @@
+import { ICON_VERSION } from "@/lib/brand";
 import { cn } from "@/lib/utils";
 
 /**
@@ -9,7 +10,7 @@ export function LogoMark({ className }: { className?: string }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element -- tiny static asset; next/image adds no value here
     <img
-      src="/ghadi-logo-128.webp"
+      src={`/ghadi-logo-128.webp?v=${ICON_VERSION}`}
       alt="Ghadi logo"
       width={32}
       height={32}

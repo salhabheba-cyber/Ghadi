@@ -5,12 +5,12 @@
  *  - Static assets (/_next/static/**, /ocr/**, /icons/**)  → cache-first
  *  - API routes (/api/**)                                  → network-only (never cached)
  *  - Navigation requests (HTML pages)                      → network-first with offline fallback
- *  - Everything else                                       → network-first
+ *  - Everything else (incl. /manifest.webmanifest)         → network-first, so manifest/icon updates are seen
  */
 
-const CACHE_VERSION = "ghadi-v5";
-const STATIC_CACHE  = `${CACHE_VERSION}-static`;
-const PAGE_CACHE    = `${CACHE_VERSION}-pages`;
+const CACHE_VERSION = "ghadi-v6";
+const STATIC_CACHE = `${CACHE_VERSION}-static`;
+const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 
 const OFFLINE_URL = "/offline";
 
@@ -18,8 +18,8 @@ const OFFLINE_URL = "/offline";
 const PRECACHE_URLS = [
   OFFLINE_URL,
   "/",
-  "/icons/icon-192x192.png",
-  "/icons/icon-512x512.png",
+  "/icons/icon-192x192.png?v=2",
+  "/icons/icon-512x512.png?v=2",
 ];
 
 // ── Install ─────────────────────────────────────────────────────────────────
@@ -64,8 +64,7 @@ self.addEventListener("fetch", (event) => {
     url.pathname.startsWith("/_next/static/") ||
     url.pathname.startsWith("/ocr/") ||
     url.pathname.startsWith("/icons/") ||
-    url.pathname === "/theme-init.js" ||
-    url.pathname === "/manifest.webmanifest"
+    url.pathname === "/theme-init.js"
   ) {
     event.respondWith(cacheFirst(request, STATIC_CACHE));
     return;
@@ -119,6 +118,9 @@ async function networkFirstWithOfflineFallback(request) {
     if (cached) return cached;
     // Return the precached offline page
     const offline = await caches.match(OFFLINE_URL);
-    return offline ?? new Response("You are offline", { status: 503, headers: { "Content-Type": "text/plain" } });
+    return (
+      offline ??
+      new Response("You are offline", { status: 503, headers: { "Content-Type": "text/plain" } })
+    );
   }
 }
