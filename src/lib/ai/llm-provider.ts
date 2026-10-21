@@ -32,8 +32,7 @@ export interface CompletionRequest {
 export type CompleteFn = (request: CompletionRequest, call: CallOptions) => Promise<string>;
 
 /**
- * A StudyProvider backed by any text-completion function. Local (Ollama) and hosted providers share
- * this class; they differ only in how `complete` reaches a model.
+ * A StudyProvider backed by a text-completion function (the OpenAI route via createHostedProvider).
  */
 export class LlmProvider implements StudyProvider {
   constructor(

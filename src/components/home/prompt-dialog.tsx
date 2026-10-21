@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 import { Button, Dialog, Field, Notice, Textarea, useToast } from "@/components/ui/primitives";
 import { useLanguage } from "@/hooks/use-language";
-import { useSettings } from "@/hooks/use-settings";
+import { useEnsureAiConsent } from "@/hooks/use-ai-consent";
 import { processPastedText, toStudyDocument } from "@/lib/document-processing/process";
 import { generateQuizFromTopic } from "@/lib/actions";
 import { saveDocument } from "@/lib/storage/repo";
@@ -67,7 +67,7 @@ export function PromptDialog({
   onSaved: (docId: string) => void;
 }) {
   const { t } = useLanguage();
-  const settings = useSettings();
+  const ensureConsent = useEnsureAiConsent();
   const toast = useToast();
   const router = useRouter();
   const [quizBusy, setQuizBusy] = useState(false);
@@ -91,10 +91,7 @@ export function PromptDialog({
     setError(null);
     setNotice(null);
     setAnswer("");
-    if (!settings.hostedConsent) {
-      setNotice("needs-consent");
-      return;
-    }
+    if (!(await ensureConsent("text"))) return;
     setPhase("working");
     const ctrl = new AbortController();
     abortRef.current = ctrl;
@@ -127,14 +124,7 @@ export function PromptDialog({
   async function topicQuiz() {
     setError(null);
     setNotice(null);
-    if (settings.provider === "offline") {
-      setNotice("not-configured");
-      return;
-    }
-    if (settings.provider === "hosted" && !settings.hostedConsent) {
-      setNotice("needs-consent");
-      return;
-    }
+    if (!(await ensureConsent("text"))) return;
     setQuizBusy(true);
     const ctrl = new AbortController();
     abortRef.current = ctrl;

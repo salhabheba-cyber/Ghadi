@@ -18,7 +18,7 @@ import {
   useToast,
 } from "@/components/ui/primitives";
 import { useLive } from "@/hooks/use-live";
-import { useSettings } from "@/hooks/use-settings";
+import { useEnsureAiConsent } from "@/hooks/use-ai-consent";
 import { downloadText, quizToMarkdown, safeFileName } from "@/lib/export";
 import { getDb } from "@/lib/storage/db";
 import { deleteQuiz, duplicateQuiz, getQuiz, saveAttempt } from "@/lib/storage/repo";
@@ -146,12 +146,12 @@ function PlaySettings({
   }) => void;
   onGoToChoice: () => void;
 }) {
-  const settings = useSettings();
+  const ensureConsent = useEnsureAiConsent();
   const [feedback, setFeedback] = useState<"immediate" | "end">(quiz.feedbackMode ?? "end");
   const [aiCheck, setAiCheck] = useState(false);
   const [lang, setLang] = useState<Lang>("en");
   const [timerMin, setTimerMin] = useState(0);
-  const aiAllowed = settings.provider !== "offline" && settings.hostedConsent;
+  const aiAllowed = true;
   const hasFillQuestions = quiz.questions.some((q) => q.type === "fill" || q.type === "short");
 
   return (
@@ -188,7 +188,11 @@ function PlaySettings({
                 type="checkbox"
                 checked={aiCheck && aiAllowed}
                 disabled={!aiAllowed}
-                onChange={(e) => setAiCheck(e.target.checked)}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  if (!on) return setAiCheck(false);
+                  void ensureConsent("text").then((ok) => setAiCheck(ok));
+                }}
                 className="accent-brand-600"
               />
               <Sparkles className="h-4 w-4 text-brand-500" aria-hidden />
@@ -196,8 +200,8 @@ function PlaySettings({
             </label>
             <p className="text-xs text-[var(--muted)]">
               {aiAllowed
-                ? "Synonyms and paraphrases are accepted. Each checked answer is sent to your AI provider and may cost money."
-                : "Off. To enable it, choose a cloud or Ollama generator in Settings and allow sending text to it."}
+                ? "Synonyms and paraphrases are accepted. Each checked answer is sent to OpenAI through this app's server and may cost money."
+                : ""}
             </p>
             {aiCheck && aiAllowed ? (
               <fieldset>

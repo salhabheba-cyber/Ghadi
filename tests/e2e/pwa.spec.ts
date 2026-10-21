@@ -48,6 +48,6 @@ test.describe("PWA manifest and icons (production build)", () => {
   }) => {
     const sw = await (await request.get("/sw.js")).text();
     expect(sw).not.toMatch(/pathname === "\/manifest\.webmanifest"/);
-    expect(sw).toMatch(/CACHE_VERSION = "ghadi-v6"/);
+    expect(sw).toMatch(/CACHE_VERSION = "ghadi-v7"/);
   });
 });

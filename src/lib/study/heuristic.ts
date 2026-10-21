@@ -1,6 +1,7 @@
 import type { CardDraft, CardOptions, NoteDraft, QuestionDraft, QuizOptions } from "@/lib/ai/types";
 import type { Difficulty, QuestionType } from "@/lib/validation/schemas";
 import { countWords } from "@/lib/utils";
+import { looksLikeWorksheet, splitWorksheetQuestions } from "./grounding";
 import { seededRandom, pickMany } from "./rng";
 import {
   blankOut,
@@ -87,7 +88,12 @@ export function generateNotesHeuristic(title: string, rawText: string): NoteDraf
     Math.max(3, Math.min(8, Math.round(sentences.length * 0.15))),
   );
   const summaryIdx = ranked.slice(0, summaryCount).sort((a, b) => a - b);
-  const summary = summaryIdx.map((i) => sentences[i]).join(" ");
+  const worksheet = looksLikeWorksheet(text);
+  const questionList = worksheet ? splitWorksheetQuestions(text) : [];
+  // A worksheet is a list of tasks, not prose: describe it instead of quoting random questions.
+  const summary = worksheet
+    ? `A worksheet of ${questionList.length} numbered questions, kept in their original order below. No explanations are included in this basic version.`
+    : summaryIdx.map((i) => sentences[i]).join(" ");
   if (!summary) notices.push("No full sentences were found to summarise.");
 
   const definitions = extractDefinitions(text).map((d) => ({
@@ -107,8 +113,11 @@ export function generateNotesHeuristic(title: string, rawText: string): NoteDraf
     const order = rankSentences(sSentences, keywords)
       .slice(0, 3)
       .sort((a, b) => a - b);
-    const body =
-      order.length > 0 ? order.map((i) => sSentences[i]).join(" ") : s.body.slice(0, 400);
+    const body = worksheet
+      ? s.body
+      : order.length > 0
+        ? order.map((i) => sSentences[i]).join(" ")
+        : s.body.slice(0, 400);
     return {
       heading: s.heading,
       body,
@@ -120,7 +129,7 @@ export function generateNotesHeuristic(title: string, rawText: string): NoteDraf
   const facts = extractFacts(text);
   const examples = extractExamples(text);
   const relationships = coOccurrences(text, keywords);
-  const keyConcepts = keywords.slice(0, 12).map((k) => k.term);
+  const keyConcepts = worksheet ? [] : keywords.slice(0, 12).map((k) => k.term);
 
   const checklist = [
     ...noteSections.slice(0, 10).map((s) => `Review: ${s.heading}`),

@@ -13,11 +13,11 @@
 UI (src/app, src/components)
    │  hooks: useLive (Dexie liveQuery), useSettings
    ▼
-Orchestration (src/lib/actions.ts)  ── read settings → run provider (with fallback) → validate → save
+Orchestration (src/lib/actions.ts)  ── re-read the stored (corrected) document → quality gate → OpenAI → ground/validate → save
    ▼
 Providers (src/lib/ai)              ── StudyProvider interface
    │     OfflineProvider → study/heuristic.ts (deterministic)
-   │     LlmProvider(CompleteFn) → Ollama client | Hosted client → /api/ai/generate
+   │     LlmProvider(CompleteFn) → hosted client → /api/ai/generate (OpenAI, server-side)
    ▼
 Core logic (src/lib/study)          ── srs, quiz-engine, text, build
 Storage (src/lib/storage)           ── db (Dexie), repo (validated writes), backup
@@ -26,7 +26,7 @@ Security (src/lib/security)         ── ssrf, safe-fetch, rate-limit (server 
 
 ## Provider abstraction
 
-`StudyProvider` exposes `generateStudyNotes`, `generateQuiz`, `generateFlashcards`, `explainAnswer`, `summarizeContent`. `LlmProvider` implements all of them once on top of a `CompleteFn({task, payload})`, so Ollama and hosted AI differ only in transport. Prompts and output schemas live in `ai/tasks.ts`: untrusted document text is delimited and labelled as data, JSON is extracted and validated with Zod, and one retry is attempted on invalid output.
+`StudyProvider` exposes `generateStudyNotes`, `generateQuiz`, `generateFlashcards`, `explainAnswer`, `summarizeContent`. `LlmProvider` implements all of them once on top of a `CompleteFn({task, payload})`, so the transport (the OpenAI route) is the only thing that varies. Prompts and output schemas live in `ai/tasks.ts`: untrusted document text is delimited and labelled as data, JSON is extracted and validated with Zod, and one retry is attempted on invalid output.
 
 `generateWithFallback` runs the chosen provider; on any failure except user cancellation it runs the offline generator and adds a notice explaining what happened. UI never shows offline output as model output.
 

@@ -6,12 +6,21 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 First public version.
 
+### Changed (AI and text quality)
+
+- OpenAI is the only AI engine, server-side, with centrally configured text (`OPENAI_MODEL`) and vision (`OPENAI_VISION_MODEL`) models. The Ollama provider and the provider setting were removed; failures are shown and never silently replaced by another provider or by heuristics.
+- New `/api/ai/vision` route and "Read with OpenAI" import for photos and scanned PDFs (batched, page-referenced, consent required).
+- Position-aware PDF text extraction (columns, exponents, page markers); richer DOCX structure.
+- New text-quality gate and grounding checks: no more question numbers or website names as key terms, incomplete facts/formulas/definitions are dropped, worksheet questions stay separate and ordered, invented exercises are removed.
+- Learner corrections to extracted text are saved (original kept) and used by all later AI requests; guides detect when the text changed.
+- Explain simpler validates the answer (never echoes the passage), supports cancel and retry.
+
 ### Added
 
 - Local-first storage in IndexedDB (Dexie) with Zod-validated records and versioned backup/restore.
 - Document import: PDF, DOCX, PPTX, TXT, Markdown, pasted text, web pages, YouTube captions, and images/scanned PDFs via opt-in OCR.
 - Offline heuristic generation of study notes, quizzes and flashcards, clearly labelled as not AI.
-- Optional Ollama (local) and server-side hosted AI providers behind a common interface, with consent and automatic honest fallback.
+- Optional Ollama (local) and server-side hosted AI providers behind a common interface, with consent (superseded: see Changed).
 - Quiz engine (multiple choice, true/false, short answer, fill-in-the-blank) with scoring, explanations, retry and history.
 - Flashcards with an SM-2-inspired scheduler and keyboard-driven review.
 - Dashboard built only from real activity, library with collections/tags/search, Markdown/CSV/JSON export, print styles.

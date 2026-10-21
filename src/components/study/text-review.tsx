@@ -3,9 +3,9 @@ import { ImagePlus, Scissors } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Button, Card, Notice, useToast } from "@/components/ui/primitives";
-import { saveDocument } from "@/lib/storage/repo";
+import { correctDocumentText, restoreOriginalText } from "@/lib/storage/repo";
 import { analyzeTextQuality } from "@/lib/study/quality";
-import { countWords, errorMessage } from "@/lib/utils";
+import { errorMessage } from "@/lib/utils";
 import type { StudyDocument } from "@/lib/validation/schemas";
 
 /**
@@ -30,18 +30,22 @@ export function TextReview({
   async function save(next: string) {
     setBusy(true);
     try {
-      await saveDocument({
-        ...doc,
-        text: next,
-        wordCount: countWords(next),
-        status: next.trim() ? "ready" : "empty",
-        warnings: [
-          ...doc.warnings.filter((w) => !w.startsWith("Text corrected")),
-          "Text corrected by you.",
-        ],
-      });
+      await correctDocumentText(doc.id, next);
       setText(next);
-      toast("Text saved.", "good");
+      toast("Text saved. Every later AI request will use your corrected text.", "good");
+    } catch (e) {
+      toast(errorMessage(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function restore() {
+    setBusy(true);
+    try {
+      const restored = await restoreOriginalText(doc.id);
+      setText(restored.text);
+      toast("Original extraction restored.", "good");
     } catch (e) {
       toast(errorMessage(e), "error");
     } finally {
@@ -63,6 +67,25 @@ export function TextReview({
           look like noise
         </span>
       </Notice>
+      {q.issues.length > 0 ? (
+        <ul className="list-disc space-y-1 ps-5 text-sm">
+          {q.issues.map((i) => (
+            <li key={i.code}>
+              <span className={i.severity === "block" ? "font-medium" : undefined}>
+                {i.message}
+              </span>
+              {i.examples.length > 0 ? (
+                <span
+                  className="mt-0.5 block break-all font-mono text-xs text-[var(--muted)]"
+                  dir="auto"
+                >
+                  {i.examples.slice(0, 2).join("  ·  ")}
+                </span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {q.examples.length > 0 ? (
         <div>
           <p className="text-sm font-medium">Examples of unreadable lines:</p>
@@ -77,8 +100,9 @@ export function TextReview({
       ) : null}
       <p className="text-sm">
         This usually happens with photos that are blurry, tilted, handwritten, or have several
-        columns. A clear, straight, well-lit photo (or the original PDF/Word file) reads much
-        better.
+        columns. Upload a clearer photo or the original PDF/Word file (you can choose “Read with
+        OpenAI” when importing a photo or scan), or correct the text below. Ghadi will not write a
+        confident study guide from text it cannot trust.
       </p>
       <div className="flex flex-wrap gap-2">
         <Link
@@ -93,6 +117,28 @@ export function TextReview({
           </Button>
         ) : null}
       </div>
+      {doc.originalText ? (
+        <details className="rounded-lg border border-[var(--border)] p-3 text-sm">
+          <summary className="cursor-pointer font-medium">
+            Compare with the original extraction
+          </summary>
+          <pre
+            className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap font-mono text-xs text-[var(--muted)]"
+            dir="auto"
+          >
+            {doc.originalText.slice(0, 6000)}
+          </pre>
+          <Button
+            className="mt-2"
+            size="sm"
+            variant="secondary"
+            disabled={busy}
+            onClick={() => void restore()}
+          >
+            Restore the original extraction
+          </Button>
+        </details>
+      ) : null}
       <div className="space-y-1">
         <label htmlFor="text-fix" className="text-sm font-medium">
           Correct the text yourself

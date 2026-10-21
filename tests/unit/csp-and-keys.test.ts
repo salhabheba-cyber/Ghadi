@@ -34,10 +34,8 @@ describe("Content-Security-Policy", () => {
     expect(directive(csp, "default-src")).toBe("default-src 'self'");
   });
 
-  it("limits network access to this origin, localhost (Ollama) and OCR language data", () => {
-    expect(directive(csp, "connect-src")).toBe(
-      "connect-src 'self' http://localhost:* http://127.0.0.1:* https://cdn.jsdelivr.net",
-    );
+  it("limits network access to this origin and OCR language data", () => {
+    expect(directive(csp, "connect-src")).toBe("connect-src 'self' https://cdn.jsdelivr.net");
     expect(directive(csp, "worker-src")).toBe("worker-src 'self' blob:");
   });
 

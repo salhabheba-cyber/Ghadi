@@ -8,6 +8,7 @@ import {
   noteSchema,
   quizSchema,
   settingsSchema,
+  MAX_DOCUMENT_CHARS,
   studyGuideSchema,
   attemptSchema,
   reviewLogSchema,
@@ -23,7 +24,8 @@ import {
   type StudyDocument,
   type StudyGuide,
 } from "@/lib/validation/schemas";
-import { newId, nowIso } from "@/lib/utils";
+import { countWords, newId, nowIso } from "@/lib/utils";
+import { normalizeText } from "@/lib/study/text";
 import { applyRating, initialSchedule } from "@/lib/study/srs";
 
 type ParseResult<T> =
@@ -46,6 +48,43 @@ export async function saveDocument(doc: StudyDocument): Promise<StudyDocument> {
 export async function getDocument(id: string): Promise<StudyDocument | undefined> {
   return getDb().documents.get(id);
 }
+
+/**
+ * Saves the learner's correction of a document's text. The first extraction is kept in `originalText`
+ * (once), and `text` becomes the corrected version, which is what every AI feature reads afterwards.
+ */
+export async function correctDocumentText(id: string, nextText: string): Promise<StudyDocument> {
+  const doc = await getDocument(id);
+  if (!doc) throw new Error("This document no longer exists.");
+  const text = normalizeText(nextText).slice(0, MAX_DOCUMENT_CHARS);
+  return saveDocument({
+    ...doc,
+    originalText: doc.originalText ?? doc.text,
+    text,
+    wordCount: countWords(text),
+    status: text.trim() ? "ready" : "empty",
+    textEditedAt: nowIso(),
+    warnings: [...doc.warnings.filter((w) => w !== CORRECTED_WARNING), CORRECTED_WARNING],
+  });
+}
+
+/** Puts the first extraction back (the learner's correction is discarded). */
+export async function restoreOriginalText(id: string): Promise<StudyDocument> {
+  const doc = await getDocument(id);
+  if (!doc?.originalText) throw new Error("There is no original text to restore.");
+  const text = doc.originalText;
+  return saveDocument({
+    ...doc,
+    text,
+    wordCount: countWords(text),
+    status: text.trim() ? "ready" : "empty",
+    originalText: undefined,
+    textEditedAt: undefined,
+    warnings: doc.warnings.filter((w) => w !== CORRECTED_WARNING),
+  });
+}
+
+export const CORRECTED_WARNING = "Text corrected by you.";
 
 /* ------------------------------ Study guides ------------------------------ */
 

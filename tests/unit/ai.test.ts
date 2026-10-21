@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildPrompt, extractJson, parseTaskOutput } from "@/lib/ai/tasks";
-import { createOllamaProvider, normalizeEndpoint, testOllamaConnection } from "@/lib/ai/ollama";
 import { createHostedProvider } from "@/lib/ai/hosted-client";
 import { generateWithFallback } from "@/lib/ai/registry";
 import { ProviderError } from "@/lib/ai/types";
@@ -29,10 +28,6 @@ const goodQuiz = JSON.stringify({
   ],
 });
 
-function chatResponse(content: string, init: ResponseInit = { status: 200 }) {
-  return new Response(JSON.stringify({ message: { content } }), init);
-}
-
 describe("prompts and output validation", () => {
   it("builds prompts that treat the source as untrusted data and demand JSON only", () => {
     const p = buildPrompt("quiz", {
@@ -46,6 +41,14 @@ describe("prompts and output validation", () => {
     expect(p.system).toMatch(/Never invent/);
     expect(p.user).toContain("<source");
     expect(p.user).toContain("Write 3 quiz questions");
+  });
+
+  it("tells the model not to invent subjects or repair unclear text, and to keep worksheet questions apart", () => {
+    const p = buildPrompt("guide-section", { title: "T", text: SOURCE, part: 1, parts: 1 });
+    expect(p.system).toMatch(/Do not name a subject/);
+    expect(p.system).toMatch(/\[unclear\]/);
+    expect(p.user).toContain('"type":"exercise"');
+    expect(p.user).toMatch(/one "exercise" block per question, in the original order/);
   });
 
   it("truncates very long sources before they are sent to a model", () => {
@@ -92,131 +95,9 @@ describe("prompts and output validation", () => {
   });
 });
 
-describe("Ollama provider", () => {
-  it("normalises and validates endpoints", () => {
-    expect(normalizeEndpoint(" http://localhost:11434/ ")).toBe("http://localhost:11434");
-    expect(() => normalizeEndpoint("ftp://x")).toThrow(/http/);
-    expect(() => normalizeEndpoint("nonsense")).toThrow(/valid URL/);
-  });
-
-  it("generates and validates a quiz from the local model", async () => {
-    const fetchMock = vi.fn(async (..._a: unknown[]) => chatResponse(goodQuiz));
-    const p = createOllamaProvider(
-      "http://localhost:11434",
-      "llama3.2",
-      fetchMock as unknown as typeof fetch,
-    );
-    const r = await p.generateQuiz(
-      { title: "t", text: SOURCE },
-      { count: 5, difficulty: "easy", types: ["mcq", "tf"], language: "same as source" },
-    );
-    expect(r.origin).toBe("local-ai");
-    expect(r.value).toHaveLength(2);
-    expect(r.notices.join(" ")).toMatch(/llama3\.2/);
-    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-    expect(url).toBe("http://localhost:11434/api/chat");
-    expect(JSON.parse(init.body as string)).toMatchObject({
-      model: "llama3.2",
-      stream: false,
-      format: "json",
-    });
-  });
-
-  it("retries once on malformed JSON, then reports invalid output", async () => {
-    const fetchMock = vi.fn(async (..._a: unknown[]) => chatResponse("definitely not json"));
-    const p = createOllamaProvider(
-      "http://localhost:11434",
-      "m",
-      fetchMock as unknown as typeof fetch,
-    );
-    await expect(p.summarizeContent({ title: "t", text: SOURCE })).rejects.toMatchObject({
-      code: "invalid-output",
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const ok = vi
-      .fn()
-      .mockResolvedValueOnce(chatResponse("oops"))
-      .mockResolvedValueOnce(chatResponse(JSON.stringify({ text: "A summary." })));
-    const p2 = createOllamaProvider("http://localhost:11434", "m", ok as unknown as typeof fetch);
-    expect((await p2.summarizeContent({ title: "t", text: SOURCE })).value).toBe("A summary.");
-  });
-
-  it("explains unreachable servers with actionable advice", async () => {
-    const p = createOllamaProvider("http://localhost:11434", "m", (async () => {
-      throw new TypeError("fetch failed");
-    }) as unknown as typeof fetch);
-    await expect(p.summarizeContent({ title: "t", text: SOURCE })).rejects.toMatchObject({
-      code: "unreachable",
-      message: expect.stringMatching(/OLLAMA_ORIGINS/),
-    });
-  });
-
-  it("tells the user how to install a missing model (and never downloads one)", async () => {
-    const fetchMock = vi.fn(
-      async (..._a: unknown[]) =>
-        new Response('{"error":"model \\"nope\\" not found, try pulling it first"}', {
-          status: 404,
-        }),
-    );
-    const p = createOllamaProvider(
-      "http://localhost:11434",
-      "nope",
-      fetchMock as unknown as typeof fetch,
-    );
-    await expect(p.summarizeContent({ title: "t", text: SOURCE })).rejects.toMatchObject({
-      code: "model-missing",
-      message: expect.stringMatching(/ollama pull nope/),
-    });
-    expect(fetchMock.mock.calls.every((c) => !String(c[0]).includes("/api/pull"))).toBe(true);
-  });
-
-  it("supports cancellation", async () => {
-    const controller = new AbortController();
-    const fetchMock = vi.fn(
-      (_u: string, init: RequestInit) =>
-        new Promise<Response>((_res, rej) => {
-          init.signal?.addEventListener("abort", () =>
-            rej(new DOMException("aborted", "AbortError")),
-          );
-        }),
-    );
-    const p = createOllamaProvider(
-      "http://localhost:11434",
-      "m",
-      fetchMock as unknown as typeof fetch,
-    );
-    const pending = p.summarizeContent({ title: "t", text: SOURCE }, { signal: controller.signal });
-    controller.abort();
-    await expect(pending).rejects.toMatchObject({ code: "cancelled" });
-  });
-
-  it("tests the connection and checks the model is installed", async () => {
-    const tags = (names: string[]) =>
-      (async () =>
-        new Response(
-          JSON.stringify({ models: names.map((name) => ({ name })) }),
-        )) as unknown as typeof fetch;
-    expect(
-      await testOllamaConnection("http://localhost:11434", "llama3.2", tags(["llama3.2:latest"])),
-    ).toMatchObject({ ok: true, modelInstalled: true });
-    const missing = await testOllamaConnection(
-      "http://localhost:11434",
-      "qwen",
-      tags(["llama3.2:latest"]),
-    );
-    expect(missing).toMatchObject({ ok: false, modelInstalled: false });
-    expect(missing.message).toMatch(/ollama pull qwen/);
-    const down = await testOllamaConnection("http://localhost:11434", "m", (async () => {
-      throw new TypeError("x");
-    }) as unknown as typeof fetch);
-    expect(down.ok).toBe(false);
-    expect((await testOllamaConnection("bad", "m")).message).toMatch(/valid URL/);
-  });
-});
-
 describe("hosted provider client", () => {
   it("requires explicit consent before it can even be constructed", () => {
-    expect(() => createHostedProvider(false)).toThrow(/consent/i);
+    expect(() => createHostedProvider(false)).toThrow(/permission/i);
   });
 
   it("only talks to Ghadi's own server route and sends consent", async () => {
@@ -252,52 +133,58 @@ describe("hosted provider client", () => {
   });
 });
 
-describe("fallback to offline", () => {
-  const offline = settingsSchema.parse({});
+describe("OpenAI is the only engine; no silent fallback", () => {
+  const consented = settingsSchema.parse({ hostedConsent: true });
+  const noConsent = settingsSchema.parse({});
+  const failing = (code: ProviderError["code"]) => async () => {
+    throw new ProviderError(code, "OpenAI failed");
+  };
 
-  it("uses offline directly when selected", async () => {
-    const r = await generateWithFallback(offline, (p) =>
-      p.summarizeContent({ title: "t", text: SOURCE }),
-    );
-    expect(r.origin).toBe("heuristic");
-    expect(r.fellBackBecause).toBeUndefined();
+  it("has no provider setting at all", () => {
+    expect("provider" in settingsSchema.parse({})).toBe(false);
+    expect("ollamaEndpoint" in settingsSchema.parse({})).toBe(false);
   });
 
-  it("does NOT silently fall back: a failing hosted provider surfaces the error", async () => {
-    const settings = settingsSchema.parse({ provider: "hosted", hostedConsent: false });
+  it("refuses to run without the learner's consent", async () => {
     await expect(
-      generateWithFallback(settings, (p) => p.summarizeContent({ title: "t", text: SOURCE })),
+      generateWithFallback(noConsent, (p) => p.summarizeContent({ title: "t", text: SOURCE })),
     ).rejects.toMatchObject({ code: "consent-required" });
   });
 
-  it("falls back to offline only when the caller explicitly allows it, and says so", async () => {
-    const settings = settingsSchema.parse({ provider: "hosted", hostedConsent: false });
+  it("surfaces an OpenAI failure instead of producing offline output", async () => {
+    await expect(generateWithFallback(consented, failing("rate-limited"))).rejects.toMatchObject({
+      code: "rate-limited",
+    });
+  });
+
+  it("uses the offline rules only when the user explicitly asks, and labels it", async () => {
     const r = await generateWithFallback(
-      settings,
+      noConsent,
       (p) => p.summarizeContent({ title: "t", text: SOURCE }),
-      { allowOfflineFallback: true },
+      { useOffline: true },
     );
     expect(r.origin).toBe("heuristic");
-    expect(r.fellBackBecause).toMatch(/consent/i);
-    expect(r.notices[0]).toMatch(/used offline heuristics instead/);
+  });
+
+  it("the explicit fallback flag says that OpenAI failed and the result is not AI", async () => {
+    const calls: string[] = [];
+    const r = await generateWithFallback(
+      consented,
+      async (p) => {
+        calls.push(p.id);
+        if (p.id === "hosted") throw new ProviderError("unreachable", "network down");
+        return p.summarizeContent({ title: "t", text: SOURCE });
+      },
+      { allowOfflineFallback: true },
+    );
+    expect(calls).toEqual(["hosted", "offline"]);
+    expect(r.origin).toBe("heuristic");
+    expect(r.notices[0]).toMatch(/OpenAI could not be used.*no AI/);
   });
 
   it("never swallows user cancellation, even when fallback is allowed", async () => {
-    const settings = settingsSchema.parse({ provider: "ollama", ollamaEndpoint: "not a url" });
-    const r = await generateWithFallback(
-      settings,
-      (p) => p.summarizeContent({ title: "t", text: SOURCE }),
-      { allowOfflineFallback: true },
-    );
-    expect(r.origin).toBe("heuristic");
     await expect(
-      generateWithFallback(
-        settings,
-        async () => {
-          throw new ProviderError("cancelled", "stop");
-        },
-        { allowOfflineFallback: true },
-      ),
+      generateWithFallback(consented, failing("cancelled"), { allowOfflineFallback: true }),
     ).rejects.toMatchObject({ code: "cancelled" });
   });
 });
@@ -322,6 +209,7 @@ describe("hosted configuration (server side)", () => {
       baseUrl: "https://api.example.com/v1",
       apiKey: "placeholder-key",
       model: "model-x",
+      visionModel: "model-x",
     });
   });
 
@@ -331,7 +219,8 @@ describe("hosted configuration (server side)", () => {
       provider: "openai",
       baseUrl: "https://api.openai.com/v1",
       apiKey: "sk-placeholder",
-      model: "gpt-4.1-mini",
+      model: "gpt-6-luna",
+      visionModel: "gpt-6.1-sol",
     });
     expect(
       readHostedConfig(

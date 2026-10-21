@@ -13,6 +13,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Badge, Button, Card, Notice } from "@/components/ui/primitives";
 import { simplifyPassage } from "@/lib/actions";
+import { useEnsureAiConsent } from "@/hooks/use-ai-consent";
 import { errorMessage } from "@/lib/utils";
 import type { StudyGuide } from "@/lib/validation/schemas";
 import { ACCENTS, Block } from "./guide-blocks";
@@ -87,6 +88,7 @@ export function GuideView({
     const open = all.some((d) => !d.open);
     all.forEach((d) => (d.open = open));
   }
+  const ensureConsent = useEnsureAiConsent();
   async function explainSelection() {
     const t = selection.current;
     if (!t) {
@@ -96,6 +98,7 @@ export function GuideView({
       });
       return;
     }
+    if (!(await ensureConsent("text"))) return;
     setSimple({ busy: true });
     try {
       setSimple({ busy: false, text: await simplifyPassage(t, undefined, guide.language) });
@@ -112,7 +115,7 @@ export function GuideView({
             {guide.origin === "heuristic"
               ? "Automatic outline"
               : guide.origin === "hosted-ai"
-                ? "Written by cloud AI"
+                ? "Written by OpenAI"
                 : "Written by local AI"}
           </Badge>
           <span className="text-xs text-[var(--muted)]">{guide.sections.length} sections</span>

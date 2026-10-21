@@ -71,15 +71,17 @@ export interface Generated<T> {
   notices: string[];
 }
 
-export type ProviderId = "offline" | "ollama" | "hosted";
+export type ProviderId = "offline" | "hosted";
 
 export interface CallOptions {
   signal?: AbortSignal;
   /**
-   * When the chosen AI provider fails, generate with offline heuristics instead. Off by default: the
-   * UI shows the error and lets the user opt in, so output is never silently swapped.
+   * When OpenAI fails, generate with offline heuristics instead. Off by default: the UI shows the
+   * error and lets the user opt in, so output is never silently swapped.
    */
   allowOfflineFallback?: boolean;
+  /** Skip OpenAI and use the offline rules directly (the user asked for a basic, no-AI version). */
+  useOffline?: boolean;
 }
 
 /**
@@ -126,7 +128,7 @@ export type ProviderErrorCode =
   | "consent-required"
   | "http-error";
 
-/** Error with a user-actionable message. The study UI falls back to offline generation on any of these. */
+/** Error with a user-actionable message. The UI shows it; it never switches engines on its own. */
 export class ProviderError extends Error {
   constructor(
     public readonly code: ProviderErrorCode,

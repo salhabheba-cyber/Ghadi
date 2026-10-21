@@ -12,7 +12,13 @@ export function GET() {
   const config = readHostedConfig();
   return jsonOk(
     config
-      ? { configured: true, provider: config.provider, model: config.model, cloud: true }
+      ? {
+          configured: true,
+          provider: config.provider,
+          model: config.model,
+          visionModel: config.visionModel,
+          cloud: true,
+        }
       : { configured: false },
   );
 }

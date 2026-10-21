@@ -2,12 +2,14 @@ import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import { mockOpenAi } from "./mock-openai";
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "photosynthesis.txt");
 
 test("exam options → export dialog: nothing downloads until Download, quiz-only file holds no key", async ({
   page,
 }) => {
+  await mockOpenAi(page);
   await page.goto("/documents");
   await page.getByTestId("file-input").setInputFiles(FIXTURE);
   await expect(page.getByRole("heading", { level: 1, name: "photosynthesis" })).toBeVisible({
@@ -58,6 +60,7 @@ test("exam options → export dialog: nothing downloads until Download, quiz-onl
 test("take exam in Ghadi: navigate, mark, refresh restores answers, submit needs confirmation", async ({
   page,
 }) => {
+  await mockOpenAi(page);
   await page.goto("/documents");
   await page.getByTestId("file-input").setInputFiles(FIXTURE);
   await expect(page.getByRole("heading", { level: 1, name: "photosynthesis" })).toBeVisible({

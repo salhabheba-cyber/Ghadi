@@ -48,7 +48,7 @@ Test-only relaxation flags exist so unit tests can talk to a local server. They 
 
 - **Content-Security-Policy with a fresh nonce on every request** (generated in `src/proxy.ts`, applied to Next.js' own scripts). `script-src` is `'self'` plus the nonce and `'wasm-unsafe-eval'` (needed by the OCR engine's WebAssembly). There is **no `unsafe-inline` and no `unsafe-eval`** for scripts in production, and no third-party script host. The theme bootstrap is a same-origin file, not an inline script. Zod runs in `jitless` mode so it never probes `new Function`.
 - `style-src` uses the nonce too; `style-src-attr 'unsafe-inline'` remains because React and Tailwind set inline `style=` attributes. That permits styling of elements, not script execution.
-- `connect-src` allows `'self'`, `localhost`/`127.0.0.1` (the optional Ollama provider) and `cdn.jsdelivr.net` (OCR language **data** for non-English languages, after consent). `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`.
+- `connect-src` allows `'self'` and `cdn.jsdelivr.net` (OCR language **data** for non-English languages, after consent). `frame-ancestors 'none'`, `object-src 'none'`, `base-uri 'self'`, `form-action 'self'`.
 - Other headers on every response: `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: strict-origin-when-cross-origin`, a restrictive `Permissions-Policy`, `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin`, `Strict-Transport-Security` (2 years, includeSubDomains; only honoured over HTTPS), `X-Permitted-Cross-Domain-Policies: none`, `X-DNS-Prefetch-Control: off`. `X-Powered-By` is removed.
 - No `dangerouslySetInnerHTML` is used on user content. Imported text is rendered as text; a browser test feeds hostile HTML/JS payloads through import, notes and the library and checks nothing executes.
 - Files are validated by extension, size and file signature; backups are validated with Zod before restore; CSV exports neutralise spreadsheet formula injection; export file names are sanitised (no path traversal, hidden files or reserved Windows names).
@@ -61,7 +61,7 @@ Every push and pull request runs: lint, format, type-check, unit and component t
 
 The following are covered by automated tests that were executed: header values and per-request nonce uniqueness, no inline script without a nonce, zero CSP violations across the main user flow in a real Chromium, XSS payload inertness, cross-site/415/private-address rejection, local-only OCR (no request leaves localhost), SSRF address classification, rate-limit identity rules, export file-name sanitising.
 
-Not verified against real services in the build environment (no outbound DNS): live web-page and YouTube import, Ollama, hosted AI providers, and non-English OCR data download. These were tested with fakes and local servers only. CodeQL, dependency review and gitleaks workflows are defined but have not run until the repository is on GitHub.
+Not verified against real services in the build environment (no outbound DNS): live web-page and YouTube import, the real OpenAI API (mocked in tests; use Settings → Test OpenAI after deploying), and non-English OCR data download. These were tested with fakes and local servers only. CodeQL, dependency review and gitleaks workflows are defined but have not run until the repository is on GitHub.
 
 ## Known limitations and findings
 
@@ -76,7 +76,7 @@ We prefer stating these over hiding them.
 5. **Dynamic rendering.** The per-request nonce means pages are server-rendered on demand and cannot be fully static-exported.
 6. **YouTube import** parses an undocumented public page structure. It performs only an ordinary page fetch plus a caption-track fetch, never audio download.
 7. **Local data is not encrypted at rest** in IndexedDB; it is protected by your operating-system account and browser profile. Backups are plain JSON. Anyone with access to your browser profile can read your study data.
-8. **Origin trust for Ollama:** to use Ollama you must allow this site's origin in `OLLAMA_ORIGINS`. Only allow origins you trust.
+8. **OpenAI API key:** it lives only in the server environment. Anyone who can reach this deployment can trigger paid requests within the rate limits, so keep the instance private or add authentication if it is public.
 
 ## Secrets
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Button, Card, Notice, useToast } from "@/components/ui/primitives";
+import { useEnsureAiConsent } from "@/hooks/use-ai-consent";
 import { generateDeckFromDocument, generateNoteFromDocument } from "@/lib/actions";
 import { analyzeTextQuality } from "@/lib/study/quality";
 import { errorMessage } from "@/lib/utils";
@@ -16,14 +17,21 @@ const linkCls =
 export function DocActions({ doc }: { doc: StudyDocument }) {
   const router = useRouter();
   const toast = useToast();
-  const [busy, setBusy] = useState<"notes" | "cards" | null>(null);
+  const ensureConsent = useEnsureAiConsent();
+  const [busy, setBusy] = useState<"notes" | "cards" | "basic" | null>(null);
   const quality = useMemo(() => analyzeTextQuality(doc.text), [doc.text]);
   const blocked = doc.status !== "ready" || quality.level === "poor";
 
-  async function go(kind: "notes" | "cards") {
+  async function go(kind: "notes" | "cards" | "basic") {
+    if (kind !== "basic" && !(await ensureConsent("text"))) return;
     setBusy(kind);
     try {
-      if (kind === "notes") router.push(`/notes/${(await generateNoteFromDocument(doc)).item.id}`);
+      if (kind === "basic")
+        router.push(
+          `/notes/${(await generateNoteFromDocument(doc, { useOffline: true })).item.id}`,
+        );
+      else if (kind === "notes")
+        router.push(`/notes/${(await generateNoteFromDocument(doc)).item.id}`);
       else router.push(`/flashcards/${(await generateDeckFromDocument(doc, 15)).item.id}`);
     } catch (e) {
       toast(errorMessage(e), "error");
@@ -99,6 +107,19 @@ export function DocActions({ doc }: { doc: StudyDocument }) {
           Flashcards
         </Button>
       </div>
+      <p className="text-xs text-[var(--muted)]">
+        Study guides, notes, quizzes and flashcards are written by OpenAI through this app&apos;s
+        server, and only after you press a button and allow it.{" "}
+        <button
+          type="button"
+          className="underline disabled:opacity-50"
+          disabled={blocked || busy !== null}
+          onClick={() => void go("basic")}
+        >
+          Make basic notes without AI
+        </button>
+        .
+      </p>
       <p className="text-xs text-[var(--muted)]">
         <strong>Study</strong> teaches you the material. <strong>Quiz</strong> tests what you know.
         They are separate.

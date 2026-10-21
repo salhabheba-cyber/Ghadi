@@ -41,7 +41,7 @@ Files affected: `README.md`, `CONTRIBUTING.md`, `.github/ISSUE_TEMPLATE/config.y
 ## 5. Repository settings
 
 - **Description:** `Free, open-source, local-first AI study platform. Turn documents into notes, quizzes and flashcards. Learn Smarter. Remember More. Stay Free.`
-- **Topics:** `study`, `flashcards`, `spaced-repetition`, `quiz`, `local-first`, `nextjs`, `typescript`, `indexeddb`, `ollama`, `education`, `open-source`
+- **Topics:** `study`, `flashcards`, `spaced-repetition`, `quiz`, `local-first`, `nextjs`, `typescript`, `indexeddb`, `openai`, `education`, `open-source`
 - **Security → Private vulnerability reporting:** enable (SECURITY.md relies on it).
 - **Security → Dependabot alerts / security updates:** enable.
 - **Branch protection on `main`:** require the `CI` checks (`check`, `e2e`) before merging.

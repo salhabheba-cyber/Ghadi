@@ -1,11 +1,15 @@
 import { DocumentProcessingError } from "./files";
 import { htmlToStudyText } from "./html-extract";
 import { normalizeText } from "@/lib/study/text";
+import { pageMarker } from "@/lib/ai/vision";
+import { layoutPageText, type PdfTextItem } from "./pdf-layout";
 
 export interface ExtractionResult {
   text: string;
   pageCount?: number;
   warnings: string[];
+  /** Per-page text without page markers (PDF only); used to tell a scan from a text PDF. */
+  pageTexts?: string[];
 }
 
 export type ProgressFn = (info: { stage: string; fraction?: number }) => void;
@@ -89,43 +93,20 @@ export async function extractPdf(
     warnings.push(`Only the first ${MAX_PDF_PAGES} of ${total} pages were read.`);
 
   const parts: string[] = [];
+  const pageTexts: string[] = [];
   try {
     for (let i = 1; i <= pages; i++) {
       onProgress?.({ stage: `Reading page ${i} of ${pages}`, fraction: i / pages });
       const page = await pdf.getPage(i);
       const content = await page.getTextContent();
-      let line = "";
-      for (const item of content.items) {
-        if ("str" in item) {
-          if (item.str) {
-            // PDF.js items within a line may need a space between them when neither
-            // the current buffer nor the incoming token supplies one naturally.
-            if (
-              line &&
-              line[line.length - 1] !== " " &&
-              line[line.length - 1] !== "\n" &&
-              item.str[0] !== " "
-            ) {
-              // Only add a space if neither string ends/starts with punctuation that
-              // naturally joins (hyphen continuation, opening bracket, etc.).
-              const lastChar = line[line.length - 1] ?? "";
-              const firstChar = item.str[0] ?? "";
-              const joinsNaturally =
-                lastChar === "-" ||
-                lastChar === "(" ||
-                firstChar === ")" ||
-                firstChar === "," ||
-                firstChar === "." ||
-                firstChar === ":" ||
-                firstChar === ";";
-              if (!joinsNaturally) line += " ";
-            }
-            line += item.str;
-          }
-          if (item.hasEOL) line += "\n";
-        }
-      }
-      parts.push(line.trim());
+      const width = page.getViewport({ scale: 1 }).width;
+      // Rebuild reading order from the geometry (columns, lines, exponents) instead of stream order.
+      const text = layoutPageText(
+        content.items.filter((it): it is typeof it & PdfTextItem => "str" in it),
+        width,
+      );
+      pageTexts.push(text);
+      parts.push(`${pageMarker(i)}\n${text}`);
       page.cleanup();
     }
   } finally {
@@ -133,7 +114,7 @@ export async function extractPdf(
   }
 
   const text = normalizeText(parts.join("\n\n"));
-  return { text, pageCount: total, warnings };
+  return { text, pageCount: total, warnings, pageTexts };
 }
 
 /** True when a PDF produced almost no text per page, which usually means a scan. */

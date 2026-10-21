@@ -4,12 +4,21 @@
  * Two ways to configure it (the first complete one wins, so older deployments keep working):
  *  1. Generic OpenAI-compatible: GHADI_HOSTED_AI_PROVIDER=openai-compatible plus
  *     GHADI_HOSTED_AI_BASE_URL, GHADI_HOSTED_AI_API_KEY and GHADI_HOSTED_AI_MODEL.
- *  2. OpenAI: OPENAI_API_KEY (required), OPENAI_MODEL (optional) and OPENAI_BASE_URL (optional).
+ *  2. OpenAI (primary): OPENAI_API_KEY (required); OPENAI_MODEL, OPENAI_VISION_MODEL and OPENAI_BASE_URL
+ *     are optional.
  */
 
 export const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
-/** Used only when OPENAI_MODEL is not set. A small, inexpensive, widely available model. */
-export const DEFAULT_OPENAI_MODEL = "gpt-4.1-mini";
+/**
+ * Default models, used only when the environment does not name one. They are the single place the app
+ * chooses models, and both can be overridden without a code change (OPENAI_MODEL, OPENAI_VISION_MODEL).
+ * Per OpenAI's model documentation both accept image input and support structured outputs on Chat
+ * Completions. (gpt-4.1 and gpt-5-mini are marked deprecated there, so they are not used.)
+ *  - text: efficient, for guides, notes, quizzes, flashcards, explanations;
+ *  - vision: the more capable model, because transcribing a maths worksheet photo must be accurate.
+ */
+export const DEFAULT_OPENAI_MODEL = "gpt-6-luna";
+export const DEFAULT_OPENAI_VISION_MODEL = "gpt-6.1-sol";
 
 export type HostedProviderKind = "openai" | "openai-compatible";
 
@@ -17,7 +26,10 @@ export interface HostedConfig {
   provider: HostedProviderKind;
   baseUrl: string;
   apiKey: string;
+  /** Model for text tasks. */
   model: string;
+  /** Vision-capable model for reading photos and scanned pages. */
+  visionModel: string;
 }
 
 function validHttpUrl(value: string): boolean {
@@ -40,6 +52,7 @@ export function readHostedConfig(env: NodeJS.ProcessEnv = process.env): HostedCo
       baseUrl: baseUrl.replace(/\/+$/, ""),
       apiKey,
       model,
+      visionModel: env.GHADI_HOSTED_AI_VISION_MODEL?.trim() || model,
     };
   }
 
@@ -52,6 +65,7 @@ export function readHostedConfig(env: NodeJS.ProcessEnv = process.env): HostedCo
       baseUrl: (custom || DEFAULT_OPENAI_BASE_URL).replace(/\/+$/, ""),
       apiKey: openaiKey,
       model: env.OPENAI_MODEL?.trim() || DEFAULT_OPENAI_MODEL,
+      visionModel: env.OPENAI_VISION_MODEL?.trim() || DEFAULT_OPENAI_VISION_MODEL,
     };
   }
   return null;

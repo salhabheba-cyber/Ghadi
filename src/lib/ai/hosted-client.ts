@@ -5,6 +5,8 @@ export interface HostedStatus {
   configured: boolean;
   /** Human-readable model label if configured (never includes secrets). */
   model?: string;
+  /** Vision model used for photos and scanned pages. */
+  visionModel?: string;
   /** "openai" or "openai-compatible". */
   provider?: string;
   /** Always true for hosted AI: document text leaves this device. */
@@ -12,7 +14,13 @@ export interface HostedStatus {
 }
 
 export type HostedTestResult =
-  | { ok: true; provider: string; model: string; latencyMs: number }
+  | {
+      ok: true;
+      provider: string;
+      model: string;
+      latencyMs: number;
+      vision?: { ok: boolean; model: string; message?: string };
+    }
   | { ok: false; code: string; message: string };
 
 /** Asks the Ghadi server to make one real request to the hosted provider. Never reports success on failure. */
@@ -26,7 +34,13 @@ export async function testHostedConnection(
       body: "{}",
     });
     const body = (await res.json().catch(() => null)) as
-      | { ok?: boolean; provider?: string; model?: string; latencyMs?: number }
+      | {
+          ok?: boolean;
+          provider?: string;
+          model?: string;
+          latencyMs?: number;
+          vision?: { ok: boolean; model: string; message?: string };
+        }
       | { error?: { code?: string; message?: string } }
       | null;
     if (res.ok && body && "ok" in body && body.ok === true) {
@@ -35,6 +49,7 @@ export async function testHostedConnection(
         provider: body.provider ?? "unknown",
         model: body.model ?? "unknown",
         latencyMs: body.latencyMs ?? 0,
+        vision: body.vision,
       };
     }
     const err = body && "error" in body ? body.error : undefined;
@@ -69,13 +84,13 @@ export async function fetchHostedStatus(fetchImpl: typeof fetch = fetch): Promis
  */
 export function createHostedProvider(
   consent: boolean,
-  modelLabel = "the hosted AI provider",
+  modelLabel = "OpenAI",
   fetchImpl: typeof fetch = fetch,
 ): LlmProvider {
   if (!consent) {
     throw new ProviderError(
       "consent-required",
-      "Hosted AI sends your document text to a third party. Give your explicit consent in Settings first.",
+      "Ghadi needs your permission to send your material to OpenAI for this. Allow it and try again.",
     );
   }
 
@@ -90,20 +105,31 @@ export function createHostedProvider(
       });
     } catch {
       if (call.signal?.aborted) throw new ProviderError("cancelled", "Generation was cancelled.");
-      throw new ProviderError("unreachable", "Could not reach Ghadi's server for hosted AI.");
+      throw new ProviderError(
+        "unreachable",
+        "Could not reach Ghadi's server. Check your connection and try again.",
+      );
     }
     const body = (await res.json().catch(() => null)) as {
       text?: string;
       error?: { code?: string; message?: string };
     } | null;
     if (!res.ok || !body || typeof body.text !== "string") {
-      const message = body?.error?.message ?? `Hosted AI request failed (HTTP ${res.status}).`;
+      const message = body?.error?.message ?? `The AI request failed (HTTP ${res.status}).`;
       const code =
-        res.status === 429 ? "rate-limited" : res.status === 501 ? "not-configured" : "http-error";
+        res.status === 429
+          ? "rate-limited"
+          : res.status === 501
+            ? "not-configured"
+            : res.status === 504
+              ? "timeout"
+              : body?.error?.code === "invalid-output"
+                ? "invalid-output"
+                : "http-error";
       throw new ProviderError(code, message);
     }
     return body.text;
   };
 
-  return new LlmProvider("hosted", `Hosted (${modelLabel})`, "hosted-ai", modelLabel, complete);
+  return new LlmProvider("hosted", modelLabel, "hosted-ai", modelLabel, complete);
 }

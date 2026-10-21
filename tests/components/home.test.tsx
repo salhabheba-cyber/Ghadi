@@ -115,15 +115,21 @@ describe("Home screen controls", () => {
     expect(await getDb().documents.count()).toBe(0);
   });
 
-  it("Prompt opens a working form and explains clearly when hosted AI is not consented", async () => {
+  it("Prompt asks for permission before sending anything to OpenAI", async () => {
     const user = setup();
     await user.click(screen.getByRole("button", { name: "Prompt" }));
     const dialog = await screen.findByRole("dialog", { name: "What do you want to study?" });
     const ask = within(dialog).getByRole("button", { name: "Ask Ghadi AI" });
     expect(ask).toBeDisabled();
     await user.type(within(dialog).getByLabelText("Your prompt"), "Explain mitosis");
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
     await user.click(ask);
-    expect(await within(dialog).findByText(/give your consent in Settings/i)).toBeVisible();
+    const consent = await screen.findByRole("dialog", { name: /Use OpenAI/ });
+    expect(within(consent).getByText(/separate from any ChatGPT subscription/)).toBeVisible();
+    await user.click(within(consent).getByRole("button", { name: /Cancel|No|Not now/i }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
   });
 
   it("Prompt can save the user's own text as a document (offline path)", async () => {

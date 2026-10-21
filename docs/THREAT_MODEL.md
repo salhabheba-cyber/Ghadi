@@ -17,7 +17,7 @@ This document explains what Ghadi protects, who might attack it, and which contr
 2. **Ghadi server ↔ the internet.** Fetching arbitrary URLs is the riskiest thing the server does.
 3. **Ghadi server ↔ AI provider.** Only when the operator configures a provider and the user consents.
 4. **Browser ↔ user-selected files.** Files are untrusted input parsed in the browser.
-5. **Browser ↔ local Ollama.** Optional; loopback only by default.
+5. **Browser ↔ OpenAI via Ghadi server.** The key never leaves the server; every request needs explicit consent in the body, is size-capped, rate-limited and Zod-validated.
 
 ## Threats and controls
 

@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import path from "node:path";
+import { mockOpenAi } from "./mock-openai";
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "photosynthesis.txt");
 const WIDTHS = [320, 360, 390, 430, 768, 1440];
@@ -95,12 +96,15 @@ test.describe("home controls", () => {
   test("Attach File imports a real file and opens the Study page (not a quiz)", async ({
     page,
   }) => {
+    const ai = await mockOpenAi(page);
     await page.goto("/");
     await page.getByTestId("home-file-input").setInputFiles(FIXTURE);
     await expect(page).toHaveURL(/\/study\/.+/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { level: 1, name: "photosynthesis" })).toBeVisible({
       timeout: 15_000,
     });
+    expect(ai.tasks).toEqual([]);
+    await page.getByRole("button", { name: "Write my study guide" }).click();
     await expect(page.getByRole("navigation", { name: "Table of contents" })).toBeVisible({
       timeout: 20_000,
     });

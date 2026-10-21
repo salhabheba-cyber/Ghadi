@@ -49,6 +49,7 @@ describe("GET /api/ai/status", () => {
       configured: true,
       provider: "openai-compatible",
       model: "model-x",
+      visionModel: "model-x",
       cloud: true,
     });
     expect(text).not.toContain(SECRET);

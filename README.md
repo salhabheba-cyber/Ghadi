@@ -4,7 +4,7 @@
 
 Ghadi is a free, open-source, **local-first** study platform. Import your own documents and turn them into structured study notes, quizzes and spaced-repetition flashcards. No account, no subscription, and by default nothing leaves your device.
 
-> **Honesty note.** Out of the box Ghadi does **not** use an AI model. It uses deterministic, rule-based text analysis ("offline heuristics") and labels everything it makes that way. Real AI is optional and opt-in: a model running on your own computer (Ollama) or a provider you configure on the server. See [AI modes](#6-ai-modes).
+> **AI note.** Ghadi's AI engine is **OpenAI**, reached only through Ghadi's own server (the API key never reaches your browser). Nothing is sent when you merely upload a file; you press a button and allow it first, and OpenAI API usage may cost money (it is separate from a ChatGPT subscription). If OpenAI fails, Ghadi shows the error and what to do next; it never silently switches to another provider or to guesses. A clearly labelled basic (no-AI) outline is available only when you ask for it. See [AI engine](#6-ai-engine).
 
 ---
 
@@ -52,25 +52,24 @@ No environment variables are required.
 
 Next.js (App Router) · React 19 · strict TypeScript · Tailwind CSS 4 (own accessible primitives) · Lucide icons · Dexie / IndexedDB · Zod · PDF.js · Mammoth · JSZip (PPTX) · tesseract.js (optional OCR) · Vitest + React Testing Library · Playwright + axe-core · ESLint · Prettier.
 
-## 6. AI modes
+## 6. AI engine
 
-| Mode                   | Default | What runs                                                                                                      | Where your text goes                                                             |
-| ---------------------- | ------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| **Offline heuristics** | yes     | Deterministic rule-based extraction (keyword ranking, definition patterns, seeded shuffling). **No AI model.** | Nowhere. Stays in your browser.                                                  |
-| **Ollama**             | no      | A model **you** installed in Ollama, called from your browser.                                                 | Only to your own machine (e.g. `localhost:11434`).                               |
-| **Hosted AI**          | no      | An OpenAI-compatible provider configured **server-side** by whoever runs Ghadi.                                | To that provider, through Ghadi's server, **only after you tick a consent box**. |
+OpenAI is the only AI engine. There is no provider switch in Settings.
 
-Every note, quiz and deck records its origin (_Offline heuristics_, _Local AI_, _Hosted AI_, _Written by you_) and shows it in the UI. If a chosen AI provider fails, Ghadi falls back to offline heuristics **and tells you** it did.
+| Task                                                              | Model setting         | Default       |
+| ----------------------------------------------------------------- | --------------------- | ------------- |
+| Guides, notes, quizzes, flashcards, explanations, Explain simpler | `OPENAI_MODEL`        | `gpt-6-luna`  |
+| Reading photos and scanned pages (vision)                         | `OPENAI_VISION_MODEL` | `gpt-6.1-sol` |
 
-### Ollama setup
+Models are chosen in one place (`src/lib/server/hosted-config.ts`) and can be changed with environment variables, no code change. All OpenAI calls run on the server (`/api/ai/generate`, `/api/ai/vision`, `/api/ai/chat`, `/api/quiz/check`, `/api/ai/test`). The server builds its own prompts, caps input size, rate-limits requests, requires explicit consent in each request body, and validates the model's JSON with Zod before anything is saved.
 
-1. Install [Ollama](https://ollama.com) and pull a model yourself, for example `ollama pull llama3.2`. Ghadi never downloads models.
-2. Allow the browser origin: `OLLAMA_ORIGINS=http://localhost:3000 ollama serve`.
-3. In **Settings → Generator** choose _Ollama_, enter the model name and press **Test connection**.
+**Setup (server operators):** set `OPENAI_API_KEY` as a private server variable (Railway: _Variables_ tab). Never prefix it with `NEXT_PUBLIC_` and never commit it. Optional: `OPENAI_MODEL`, `OPENAI_VISION_MODEL`, `OPENAI_BASE_URL`. See [.env.example](.env.example). In **Settings → Test OpenAI** make one tiny real request (text and a test image) to confirm the key and models work; Ghadi only reports "connected" when OpenAI actually answered.
 
-### Hosted AI setup (optional, server operators)
+**Without a key** the app still starts: importing text/PDF/Word/PowerPoint, the library, flashcard review and progress all work; AI features show "OpenAI is not set up on this server".
 
-Copy `.env.example` to `.env.local` and set `OPENAI_API_KEY` (optionally `OPENAI_MODEL`), or the four generic `GHADI_HOSTED_AI_*` variables. Keys are read only on the server and are never sent to the browser. The server builds its own prompts, caps input size, rate-limits requests (40/min per client), and validates the model's JSON output. It is **not** an open LLM proxy. See [docs/PRIVACY.md](docs/PRIVACY.md).
+**Offline extras** (no AI, labelled "Offline heuristics"): basic notes and a rule-based outline, produced only when you press "Make basic notes without AI" / "Basic outline (no AI)".
+
+Every note, quiz, guide and deck records its origin (_Offline heuristics_, _OpenAI_, _Written by you_) and shows it in the UI.
 
 ## 7. Importing documents
 
@@ -117,7 +116,7 @@ src/lib/
   validation/       Zod schemas (source of truth for types)
   storage/          Dexie database, repository, backup/restore
   study/            heuristic generators, quiz engine, SRS scheduler
-  ai/               provider abstraction, Ollama, hosted client, fallback
+  ai/               study-provider abstraction, OpenAI (server) client, prompts + validation, vision
   document-processing/  extractors, OCR, HTML + YouTube parsing
   security/         SSRF guard, safe fetch, rate limiter
 tests/              unit, component (RTL) and e2e (Playwright)
@@ -161,7 +160,7 @@ All environment variables are optional and server-side. See [.env.example](.env.
 - YouTube import depends on a public, undocumented page structure and may break without notice. Videos without captions are refused.
 - Data lives in one browser profile. There is no sync; use backups to move between devices.
 - The rate limiter is in-memory and per server instance.
-- Ollama, YouTube/URL import against live sites, OCR and hosted-AI providers were verified with fakes and local test servers, not against the real services, in the environment where this was built. Please report problems.
+- OpenAI integration was verified with mocked responses (unit + browser tests) in the environment where this was built; a real request needs a key and was not made there. After deploying, use **Settings → Test OpenAI**. YouTube/URL import against live sites and non-English OCR data download were likewise verified with fakes only.
 - `npm audit` reports findings; see [SECURITY.md](SECURITY.md).
 
 ## 19. Roadmap
@@ -184,8 +183,9 @@ See [docs/PUBLISHING.md](docs/PUBLISHING.md) for step-by-step commands. This rep
 
 Ghadi keeps two workflows apart:
 
-- **Study** ("teach me this"): Attach File / Paste URL / Attach Photos open `/study/:id`, a visual study guide (overview, objectives, sections, key terms, steps, tables, SVG flow diagrams, recaps, glossary). Long documents are processed in sections and merged. With OpenAI or Ollama configured the guide is written by the model and checked against the source; without them Ghadi builds a clearly labelled rule-based outline. Guides are saved locally and included in backups.
+- **Study** ("teach me this"): Attach File / Paste URL / Attach Photos open `/study/:id`, a visual study guide (overview, objectives, sections, key terms, steps, tables, SVG flow diagrams, recaps, glossary). Long documents are processed in sections and merged. The guide is written by OpenAI after you press "Write my study guide" and checked against the source (incomplete terms, formulas and invented questions are removed); a clearly labelled rule-based outline is available on request. Guides are saved locally and included in backups.
 - **Quiz** ("test what I know"): Quick Quiz opens `/quizzes/new` (document or topic, count, difficulty, language, types, reveal timing), then Take Exam / Export Exam.
-- **Text-quality gate**: garbled or noisy OCR text is flagged; you can remove noisy lines or correct the text by hand. Ghadi will not generate a guide, notes, cards or a quiz from unusable text.
+- **Text-quality gate**: text is checked for encoding damage, noise and stray symbols, repeated lines, run-together or missing numbered questions, broken numbers/expressions and fragments; legitimate maths, scientific notation and other scripts pass. When it is unreliable Ghadi explains why and offers: upload a clearer file, read a photo with OpenAI vision, remove noisy lines, or correct the text by hand. Your original extraction is kept for comparison, your corrections are saved, and every later AI request uses the corrected text. Ghadi will not generate a guide, notes, cards or a quiz from unusable text.
+- **Extraction by source**: text PDFs are read directly with position-aware layout (columns, exponents, paragraphs, page markers); DOCX keeps headings, lists, tables, superscripts and subscripts; PPTX keeps slides and notes; scanned PDFs (up to 40 pages, in batches of 4) and photos can be read with OpenAI vision after you agree, or with on-device OCR.
 
 Limitations: diagrams are drawn only from relationships the guide states; Ghadi does not re-run OCR from a stored image (retake a clearer photo instead); the offline guide is an outline, not a full explanation.

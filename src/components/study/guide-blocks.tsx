@@ -8,8 +8,9 @@ import {
   Loader2,
   Sparkles,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { simplifyPassage } from "@/lib/actions";
+import { useEnsureAiConsent } from "@/hooks/use-ai-consent";
 import { errorMessage } from "@/lib/utils";
 import type { GuideBlock } from "@/lib/validation/schemas";
 import { FlowDiagram } from "./flow-diagram";
@@ -58,13 +59,24 @@ export function SimplerButton({
   const [state, setState] = useState<{ busy: boolean; answer?: string; error?: string }>({
     busy: false,
   });
+  const ensureConsent = useEnsureAiConsent();
+  const abort = useRef<AbortController | null>(null);
   async function go() {
+    if (!(await ensureConsent("text"))) return;
+    const controller = new AbortController();
+    abort.current = controller;
     setState({ busy: true });
     try {
-      const answer = await simplifyPassage(text, context, language);
+      const answer = await simplifyPassage(text, context, language, { signal: controller.signal });
       setState({ busy: false, answer });
     } catch (e) {
-      setState({ busy: false, error: errorMessage(e) });
+      setState(
+        controller.signal.aborted
+          ? { busy: false, error: "Cancelled." }
+          : { busy: false, error: errorMessage(e) },
+      );
+    } finally {
+      abort.current = null;
     }
   }
   return (
@@ -80,8 +92,17 @@ export function SimplerButton({
         ) : (
           <Sparkles className="h-3 w-3" aria-hidden />
         )}
-        {state.busy ? "Simplifying…" : "Explain simpler"}
+        {state.busy ? "Simplifying…" : state.error ? "Try again" : "Explain simpler"}
       </button>
+      {state.busy ? (
+        <button
+          type="button"
+          onClick={() => abort.current?.abort()}
+          className="ms-2 text-xs underline"
+        >
+          Cancel
+        </button>
+      ) : null}
       <div aria-live="polite">
         {state.answer ? (
           <p

@@ -38,7 +38,7 @@ describe("OriginBadge", () => {
       </>,
     );
     expect(screen.getByText("Local AI")).toBeInTheDocument();
-    expect(screen.getByText("Hosted AI")).toBeInTheDocument();
+    expect(screen.getByText("OpenAI")).toBeInTheDocument();
   });
 });
 

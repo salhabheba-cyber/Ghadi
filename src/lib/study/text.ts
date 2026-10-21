@@ -3,6 +3,16 @@
  * Everything here is deterministic and explainable: no model is involved.
  */
 
+import { analyzeTextQuality, isUsableForGeneration } from "./quality";
+import {
+  isCompleteDefinition,
+  isCompleteFact,
+  isMeaningfulTerm,
+  isSensibleHeading,
+  looksLikeWorksheet,
+  splitWorksheetQuestions,
+} from "./grounding";
+
 const EN_STOPWORDS = `a about above after again against all also am an and any are as at be because been before being below
 between both but by can could did do does doing down during each few for from further had has have having he her here hers
 him his how i if in into is it its just may me might more most must my no nor not now of off on once only or other our out over
@@ -95,8 +105,11 @@ function looksLikeHeading(line: string, prevBlank: boolean, hasNext: boolean): s
   if (!hasNext || trimmed.length > 90) return null;
   const words = trimmed.split(/\s+/).length;
   if (/[.!?,;]$/.test(trimmed) || words > 10) return null;
-  const numbered = /^(?:\d+(?:\.\d+)*[.)]?|[IVX]+\.)\s+\p{Lu}/u.test(trimmed);
-  if (numbered) return trimmed;
+  // A heading is never a numbered question/instruction ("27 What…"), a web address or an unclear line.
+  if (!isSensibleHeading(trimmed)) return null;
+  // Section numbering looks like "1.2 Title" or "IV. Title"; a plain "27 What…" is a worksheet item.
+  const numbered = /^(?:\d+(?:\.\d+)+[.)]?|\d+[.)]|[IVX]+\.)\s+\p{Lu}/u.test(trimmed);
+  if (numbered && words >= 2) return trimmed;
   if (!prevBlank) return null;
   if (trimmed.endsWith(":") && words <= 7) return trimmed.slice(0, -1);
   if (isUpper(trimmed) || isTitleCase(trimmed)) return trimmed;
@@ -105,6 +118,22 @@ function looksLikeHeading(line: string, prevBlank: boolean, hasNext: boolean): s
 
 /** Splits text into headed sections. Falls back to fixed-size "Part N" chunks when no headings exist. */
 export function splitSections(text: string, maxSections = 40): Section[] {
+  // A worksheet is not a lesson: keep the questions, in order, in groups. Never invent topics.
+  if (looksLikeWorksheet(text)) {
+    const qs = splitWorksheetQuestions(text);
+    const groups: Section[] = [];
+    for (let i = 0; i < qs.length; i += 5) {
+      const chunk = qs.slice(i, i + 5);
+      groups.push({
+        heading:
+          chunk.length === 1
+            ? `Question ${chunk[0]!.number}`
+            : `Questions ${chunk[0]!.number}–${chunk.at(-1)!.number}`,
+        body: chunk.map((q) => `${q.number}. ${q.text}`).join("\n"),
+      });
+    }
+    return groups.slice(0, maxSections);
+  }
   const lines = normalizeText(text).split("\n");
   const sections: Section[] = [];
   let current: Section | null = null;
@@ -217,6 +246,7 @@ export function keywordScores(text: string, limit = 30): ScoredTerm[] {
       count: Math.round(count),
       score: count * (term.includes(" ") ? 1.4 : 1),
     }))
+    .filter((k) => isMeaningfulTerm(k.term).ok)
     .sort((x, y) => y.score - x.score || x.term.localeCompare(y.term))
     .slice(0, limit);
 }
@@ -268,6 +298,8 @@ function cleanTerm(raw: string): string | null {
   if (NON_TERMS.has(term.toLowerCase())) return null;
   if (words.some((w) => NON_TERMS.has(w.toLowerCase()) && words.length === 1)) return null;
   if (!/\p{L}/u.test(term)) return null;
+  // Question numbers ("27 What"), website names and sentence fragments are not terms.
+  if (!isMeaningfulTerm(term).ok) return null;
   return term;
 }
 
@@ -299,8 +331,11 @@ export function extractDefinitions(text: string, limit = 30): ExtractedDefinitio
       if (re === DEF_PATTERNS[4] && STOPWORDS.has(term.toLowerCase())) continue;
       const key = term.toLowerCase();
       if (seen.has(key)) continue;
+      const definition = rawDef.replace(/[.\s]+$/, "") + ".";
+      // Only a complete definition that the source really contains is kept.
+      if (!isCompleteDefinition(term, definition, text).ok) continue;
       seen.add(key);
-      found.push({ term, definition: rawDef.replace(/[.\s]+$/, "") + ".", excerpt: sentence });
+      found.push({ term, definition, excerpt: sentence });
       break;
     }
     if (found.length >= limit) break;
@@ -331,6 +366,7 @@ export function extractFacts(text: string, limit = 30): ExtractedFact[] {
       for (const d of dates) {
         const key = `date:${d}:${sentence.slice(0, 40)}`;
         if (seen.has(key)) continue;
+        if (!isCompleteFact("date", d, sentence).ok) continue;
         seen.add(key);
         facts.push({ kind: "date", value: d, context: sentence.slice(0, 300) });
       }
@@ -338,6 +374,7 @@ export function extractFacts(text: string, limit = 30): ExtractedFact[] {
     for (const m of sentence.matchAll(FORMULA_RE)) {
       const value = (m[1] ?? "").trim();
       if (!value || seen.has(`formula:${value}`)) continue;
+      if (!isCompleteFact("formula", value, sentence).ok) continue;
       seen.add(`formula:${value}`);
       facts.push({ kind: "formula", value, context: sentence.slice(0, 300) });
     }
@@ -394,68 +431,15 @@ export interface SourceQualityResult {
  * chemical formulas, abbreviations, and multilingual content are NOT rejected.
  */
 export function validateSourceQuality(text: string): SourceQualityResult {
-  const trimmed = text.trim();
-  if (trimmed.length === 0) {
+  if (text.trim().length === 0) {
     return { ok: false, reason: "The document appears to be empty." };
   }
-
-  const sample = trimmed.slice(0, 20_000);
-
-  // 1. Replacement character density (encoding corruption)
-  const replacementCount = (sample.match(/�/g) ?? []).length;
-  if (replacementCount / sample.length > 0.05) {
-    return {
-      ok: false,
-      reason:
-        "The extracted text contains too many unreadable characters (encoding corruption). " +
-        "Try a different format or a text-based PDF.",
-    };
-  }
-
-  // 2. Token quality analysis
-  const tokens = sample.match(/[^\s]+/g) ?? [];
-  if (tokens.length < 5) {
-    return { ok: false, reason: "Not enough text could be extracted from this document." };
-  }
-
-  let alphaCount = 0; // tokens that are mostly alphabetic (good signal)
-  let shortNoisyCount = 0; // tokens that look like noise: "22h", "iol", "$8%", "=F"
-
-  for (const tok of tokens) {
-    const letters = (tok.match(/[a-zA-ZÀ-ɏ؀-ۿऀ-ॿ]/g) ?? []).length;
-    const alphaRatio = letters / tok.length;
-    if (alphaRatio >= 0.6) alphaCount++;
-    // Noise heuristic: short token where fewer than half of chars are alphabetic
-    // and it doesn't look like a pure number (which can be valid: "2024", "42")
-    if (tok.length <= 4 && alphaRatio < 0.5 && !/^\d+$/.test(tok)) {
-      shortNoisyCount++;
-    }
-  }
-
-  const alphaRatio = alphaCount / tokens.length;
-  const noisyRatio = shortNoisyCount / tokens.length;
-
-  if (tokens.length > 20 && alphaRatio < 0.35) {
-    return {
-      ok: false,
-      reason:
-        "We couldn't extract readable text from this document. " +
-        "The content doesn't appear to be in any supported language. " +
-        "Try uploading a text-based PDF, another supported format, or a clearer scan.",
-    };
-  }
-
-  if (tokens.length > 20 && noisyRatio > 0.45) {
-    return {
-      ok: false,
-      reason:
-        "We couldn't extract readable text from this document. " +
-        "It contains too many short, garbled fragments. " +
-        "Try uploading a text-based PDF, another supported format, or a clearer scan.",
-    };
-  }
-
-  return { ok: true };
+  const q = analyzeTextQuality(text);
+  if (isUsableForGeneration(q)) return { ok: true };
+  return {
+    ok: false,
+    reason: `${q.issues[0]?.message ?? "The text is not readable."} Try a text-based file, a clearer scan, or correct the text first.`,
+  };
 }
 
 /** Replaces the first whole-word occurrence of `term` in `sentence` with a blank. Returns null if absent. */

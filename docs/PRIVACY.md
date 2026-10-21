@@ -17,8 +17,7 @@ Only in these cases, each triggered by something you do:
 
 1. **Import from a web page / YouTube.** The address you enter is sent to the Ghadi server, which fetches the public page (or its caption track) and returns the text. The server does not store it. Page contents are not logged.
 2. **OCR (opt-in).** English OCR uses an engine and language data served by Ghadi itself, so nothing is downloaded from a third party. For any other language, your browser downloads that language's data file from `cdn.jsdelivr.net` after Ghadi asks you; that host sees an ordinary download request from your IP address. **Your document is never uploaded**; recognition always runs locally.
-3. **Ollama (opt-in).** Document text is sent to the address you configured (default `http://localhost:11434`, i.e. your own computer). If you point it at another machine, that machine receives your text.
-4. **Hosted AI (opt-in, needs consent).** If the server operator configured a provider and you tick the consent box, the text of the document you generate from is sent through the Ghadi server to that provider. Their privacy policy then applies. Ghadi's server does not log document text, prompts or keys.
+3. **OpenAI (needs your permission each time you have not yet given it).** When you press a button that uses AI (write a study guide, make a quiz or flashcards, Explain simpler, check an answer) and allow it, the text involved is sent through the Ghadi server to OpenAI. If you choose "Read with OpenAI" for a photo or scanned PDF, the page images are sent too; Ghadi does not store them. Uploading a file never sends anything by itself. OpenAI API usage may cost money and is separate from a ChatGPT subscription. OpenAI's privacy policy then applies. Ghadi's server does not log document text, images, prompts or keys.
 
 If none of these are used, no study content ever leaves the browser.
 

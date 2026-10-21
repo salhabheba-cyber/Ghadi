@@ -1,6 +1,13 @@
 import type { NoteDraft } from "@/lib/ai/types";
 import type { GuideBlock, GuideSection, StudyGuide } from "@/lib/validation/schemas";
 import { excerptInSource } from "@/lib/study/build";
+import {
+  appearsInSource,
+  isCompleteDefinition,
+  isCompleteFormula,
+  isMeaningfulTerm,
+  pageOf,
+} from "@/lib/study/grounding";
 import { newId, nowIso } from "@/lib/utils";
 
 /** Source characters per model call. Small enough that the guide for one chunk fits in one response. */
@@ -53,15 +60,45 @@ function hardSplit(s: string, max: number): string[] {
  * - a flow diagram whose edges point at nodes that do not exist is dropped (never repaired by guessing).
  */
 export function groundBlocks(blocks: GuideBlock[], sourceText: string): GuideBlock[] {
+  return groundBlocksReport(blocks, sourceText).blocks;
+}
+
+/**
+ * Same as groundBlocks, also counting what was removed so the guide can say so. Removal rules:
+ * - a definition whose term is not a real term ("27 What", a website name) or whose meaning is cut off;
+ * - a formula that is incomplete (one side empty, dangling operator, unmatched bracket);
+ * - an exercise whose text is not actually in the document.
+ */
+export function groundBlocksReport(
+  blocks: GuideBlock[],
+  sourceText: string,
+): { blocks: GuideBlock[]; dropped: number } {
   const out: GuideBlock[] = [];
+  let dropped = 0;
   for (const b of blocks) {
     if (b.type === "definition") {
+      if (!isMeaningfulTerm(b.term).ok || !isCompleteDefinition(b.term, b.definition).ok) {
+        dropped++;
+        continue;
+      }
       if (b.sourceExcerpt) {
         const ok = excerptInSource(b.sourceExcerpt, sourceText);
         out.push(
           ok ? { ...b, verified: true } : { ...b, sourceExcerpt: undefined, verified: false },
         );
       } else out.push({ ...b, verified: false });
+    } else if (b.type === "formula") {
+      if (!isCompleteFormula(b.expression).ok) {
+        dropped++;
+        continue;
+      }
+      out.push({ ...b, page: b.page ?? pageOf(sourceText, b.expression) });
+    } else if (b.type === "exercise") {
+      if (!appearsInSource(b.text, sourceText)) {
+        dropped++;
+        continue;
+      }
+      out.push({ ...b, page: b.page ?? pageOf(sourceText, b.text) });
     } else if (b.type === "example") {
       const fromDoc =
         b.source === "document" && b.sourceExcerpt && excerptInSource(b.sourceExcerpt, sourceText);
@@ -74,12 +111,13 @@ export function groundBlocks(blocks: GuideBlock[], sourceText: string): GuideBlo
       const ids = new Set(b.nodes.map((n) => n.id));
       const edges = b.edges.filter((e) => ids.has(e.from) && ids.has(e.to) && e.from !== e.to);
       if (ids.size === b.nodes.length && edges.length > 0) out.push({ ...b, edges });
+      else dropped++;
     } else if (b.type === "table") {
       const w = b.columns.length;
       out.push({ ...b, rows: b.rows.map((r) => Array.from({ length: w }, (_, i) => r[i] ?? "")) });
     } else out.push(b);
   }
-  return out;
+  return { blocks: out, dropped };
 }
 
 /** Joins sections that the model repeated across chunks (same heading) so topics are not duplicated. */
@@ -106,6 +144,12 @@ export function mergeGlossary(entries: { term: string; meaning: string }[]) {
   const out: { term: string; meaning: string }[] = [];
   for (const e of entries) {
     const k = e.term.trim().toLowerCase();
+    if (
+      !isMeaningfulTerm(e.term).ok ||
+      e.meaning.trim().length < 6 ||
+      /[,;:(\-–—]$/.test(e.meaning.trim())
+    )
+      continue;
     if (seen.has(k)) continue;
     seen.add(k);
     out.push(e);
@@ -193,7 +237,7 @@ export function outlineFromNote(
     finalSummary: note.summary,
     glossary: note.definitions.slice(0, 50).map((d) => ({ term: d.term, meaning: d.definition })),
     notices: [
-      "This is an automatic outline made with rules, not an explanation written by an AI model. It reorganises what is in the document. For a full step-by-step explanation with examples and diagrams, choose OpenAI or Ollama in Settings.",
+      "This is an automatic outline made with rules, not an explanation written by an AI model. It reorganises what is in the document. For a full step-by-step explanation with examples and diagrams, generate the guide with OpenAI.",
     ],
     userNotes: "",
     tags: [],

@@ -52,12 +52,20 @@ export const documentSchema = z.object({
     "docx",
     "pptx",
     "ocr",
+    "vision",
     "html",
     "transcript",
     "paste",
   ]),
   status: z.enum(["ready", "needs-ocr", "empty"]),
   warnings: z.array(z.string().max(500)).max(20).default([]),
+  /**
+   * The first extraction, kept when the learner corrects the text, so the two can be compared and the
+   * original restored. Every AI feature reads `text` (the corrected version), never this.
+   */
+  originalText: z.string().max(MAX_DOCUMENT_CHARS).optional(),
+  /** When the learner last corrected the text by hand. */
+  textEditedAt: timestamp.optional(),
   tags,
   collectionId: id.optional(),
   createdAt: timestamp,
@@ -87,6 +95,8 @@ export const guideBlockSchema = z.discriminatedUnion("type", [
     definition: gText(1200),
     sourceExcerpt: z.string().max(600).optional(),
     verified: z.boolean().optional(),
+    /** Page of the source this comes from, when known. */
+    page: z.number().int().min(1).max(10_000).optional(),
   }),
   z.object({
     type: z.literal("steps"),
@@ -111,6 +121,8 @@ export const guideBlockSchema = z.discriminatedUnion("type", [
     text: gText(2000),
     source: guideSourceSchema.default("added"),
     sourceExcerpt: z.string().max(600).optional(),
+    /** Page of the source this comes from, when known. */
+    page: z.number().int().min(1).max(10_000).optional(),
   }),
   z.object({
     type: z.literal("formula"),
@@ -118,6 +130,20 @@ export const guideBlockSchema = z.discriminatedUnion("type", [
     expression: gText(300),
     explanation: z.string().max(1000).default(""),
     workedExample: z.string().max(1500).optional(),
+    /** Page of the source this comes from, when known. */
+    page: z.number().int().min(1).max(10_000).optional(),
+  }),
+  /** A question from a worksheet, copied from the source in its original order, with how to approach it. */
+  z.object({
+    type: z.literal("exercise"),
+    number: z.string().trim().max(20).default(""),
+    /** The question exactly as it appears in the source. */
+    text: gText(2000),
+    /** The idea or method needed. Never a final answer unless the source states one. */
+    approach: z.string().max(1200).default(""),
+    concept: z.string().max(160).optional(),
+    /** Page of the source this comes from, when known. */
+    page: z.number().int().min(1).max(10_000).optional(),
   }),
   z.object({
     type: z.literal("timeline"),
@@ -186,6 +212,8 @@ export const studyGuideSchema = z.object({
   tags,
   collectionId: id.optional(),
   sourceChars: z.number().int().nonnegative(),
+  /** Fingerprint of the document text this guide was written from; a different one means the text changed. */
+  sourceHash: z.string().max(40).optional(),
   createdAt: timestamp,
   updatedAt: timestamp,
 });
@@ -422,10 +450,11 @@ export type Collection = z.infer<typeof collectionSchema>;
 
 /** Non-secret settings only. API keys are never stored in the browser. */
 export const settingsSchema = z.object({
-  provider: z.enum(["offline", "ollama", "hosted"]).default("offline"),
-  ollamaEndpoint: z.string().max(300).default("http://localhost:11434"),
-  ollamaModel: z.string().max(120).default("llama3.2"),
-  /** User has explicitly agreed to send document content to the hosted provider. */
+  /**
+   * The user has agreed to send document text and photos to OpenAI (through this Ghadi server) for AI
+   * features. There is no provider choice: OpenAI is the one AI engine. Older saved settings that still
+   * carry "provider"/"ollama*" keys are accepted and those keys are simply dropped.
+   */
   hostedConsent: z.boolean().default(false),
   dailyGoalCards: z.number().int().min(1).max(500).default(20),
   /** Interface language. English, French or Modern Standard Arabic (right-to-left). */

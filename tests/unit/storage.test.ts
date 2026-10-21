@@ -98,9 +98,6 @@ describe("storage repository", () => {
     await expect(saveDocument({ ...doc, title: "   " })).rejects.toThrow(/Invalid document/);
     await expect(
       saveSettings({
-        provider: "ollama",
-        ollamaEndpoint: "x",
-        ollamaModel: "m",
         hostedConsent: false,
         uiLanguage: "en",
         dailyGoalCards: 0,
@@ -179,9 +176,9 @@ describe("storage repository", () => {
 
   it("settings fall back to safe defaults and never contain secrets", async () => {
     const defaults = await loadSettings();
-    expect(defaults).toMatchObject({ provider: "offline", hostedConsent: false });
-    await saveSettings({ ...defaults, provider: "ollama", ollamaModel: "llama3.2" });
-    expect((await loadSettings()).provider).toBe("ollama");
+    expect(defaults).toMatchObject({ hostedConsent: false });
+    await saveSettings({ ...defaults, hostedConsent: true });
+    expect((await loadSettings()).hostedConsent).toBe(true);
     expect(Object.keys(defaults).join()).not.toMatch(/key|token|secret/i);
   });
 

@@ -2,13 +2,14 @@ import { clientKey, rateLimit } from "@/lib/security/rate-limit";
 import { isJsonRequest, jsonError, jsonOk, sameOriginOrNull } from "@/lib/server/http";
 import { completeText, toAiError } from "@/lib/ai/openai-server";
 import { readHostedConfig } from "@/lib/server/hosted-config";
+import { SELF_TEST_IMAGE_DATA_URL } from "@/lib/ai/vision";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * POST /api/ai/test — makes one tiny real request to the configured provider so Settings can show
- * whether it truly works. Sends only a fixed word, never user content, so it needs no consent.
+ * POST /api/ai/test — makes two tiny real requests (text, then a fixed test image) so Settings can show
+ * whether text and vision truly work. Sends only fixed content, never user content, so it needs no consent.
  */
 export async function POST(request: Request) {
   if (!sameOriginOrNull(request))
@@ -38,11 +39,35 @@ export async function POST(request: Request) {
       { system: "Reply with the single word OK.", user: "ping", maxTokens: 256 },
       { cfg: config, timeoutMs: 20_000 },
     );
+    const textMs = Date.now() - started;
+    // Prove the vision model can really read an image: the fixed test image shows the number 42.
+    let vision: { ok: boolean; model: string; message?: string };
+    try {
+      const v = await completeText(
+        {
+          system: "Reply with only the number shown in the image.",
+          user: "What number is in the image?",
+          images: [{ dataUrl: SELF_TEST_IMAGE_DATA_URL }],
+          maxTokens: 512,
+        },
+        { cfg: config, timeoutMs: 30_000, vision: true },
+      );
+      vision = /42/.test(v.text)
+        ? { ok: true, model: v.model }
+        : {
+            ok: false,
+            model: v.model,
+            message: "The vision model answered but did not read the test image correctly.",
+          };
+    } catch (error) {
+      vision = { ok: false, model: config.visionModel, message: toAiError(error).message };
+    }
     return jsonOk({
       ok: true,
       provider: config.provider,
       model: config.model,
-      latencyMs: Date.now() - started,
+      latencyMs: textMs,
+      vision,
     });
   } catch (error) {
     const failure = toAiError(error);

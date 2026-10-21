@@ -13,7 +13,7 @@ import {
   useToast,
 } from "@/components/ui/primitives";
 import { useLive } from "@/hooks/use-live";
-import { useSettings } from "@/hooks/use-settings";
+import { useEnsureAiConsent } from "@/hooks/use-ai-consent";
 import { generateQuizFromDocument, generateQuizFromTopic } from "@/lib/actions";
 import { ProviderError, type CallOptions } from "@/lib/ai/types";
 import { getDb } from "@/lib/storage/db";
@@ -33,7 +33,7 @@ export function QuizSetup() {
   const router = useRouter();
   const toast = useToast();
   const params = useSearchParams();
-  const settings = useSettings();
+  const ensureConsent = useEnsureAiConsent();
   const abort = useRef<AbortController | null>(null);
   const { data: docs } = useLive(
     () => getDb().documents.orderBy("updatedAt").reverse().toArray(),
@@ -58,19 +58,12 @@ export function QuizSetup() {
   const selected = usable.find((d) => d.id === (docId || usable[0]?.id));
   const quality = useMemo(() => (selected ? analyzeTextQuality(selected.text) : null), [selected]);
   const blocked = source === "document" && (!selected || quality?.level === "poor");
-  const topicOffline = source === "topic" && settings.provider === "offline";
-  const needsConsent = settings.provider === "hosted" && !settings.hostedConsent;
-  const generatorName =
-    settings.provider === "offline"
-      ? "offline rules"
-      : settings.provider === "ollama"
-        ? `Ollama (${settings.ollamaModel})`
-        : "OpenAI / hosted AI";
 
-  async function run(allowOfflineFallback: boolean) {
+  async function run(useOffline: boolean) {
+    if (!useOffline && !(await ensureConsent("text"))) return;
     const controller = new AbortController();
     abort.current = controller;
-    const call: CallOptions = { signal: controller.signal, allowOfflineFallback };
+    const call: CallOptions = { signal: controller.signal, useOffline };
     setBusy(true);
     setError(null);
     setOfflineRetry(false);
@@ -87,8 +80,7 @@ export function QuizSetup() {
         setError("Generation was cancelled.");
       else {
         setError(errorMessage(e));
-        if (source === "document" && settings.provider !== "offline" && !allowOfflineFallback)
-          setOfflineRetry(true);
+        if (source === "document" && !useOffline) setOfflineRetry(true);
       }
     } finally {
       setBusy(false);
@@ -183,15 +175,6 @@ export function QuizSetup() {
               Topic quizzes come from the AI&apos;s general knowledge, not from your documents, so
               they are not source-grounded. Check facts that matter.
             </Notice>
-            {topicOffline ? (
-              <Notice tone="warn">
-                Topic quizzes need an AI model.{" "}
-                <Link href="/settings" className="font-medium underline">
-                  Choose OpenAI or Ollama in Settings
-                </Link>
-                .
-              </Notice>
-            ) : null}
           </>
         )}
       </Card>
@@ -272,24 +255,16 @@ export function QuizSetup() {
       <Card className="space-y-3">
         <h2 className="font-semibold">3. Create</h2>
         <p className="text-sm text-[var(--muted)]">
-          Generator: {generatorName}. Change it in Settings.
+          Written by OpenAI through this app&apos;s server. Nothing is sent until you press Create
+          quiz, and API usage may cost money (separate from a ChatGPT subscription).
         </p>
-        {needsConsent ? (
-          <Notice tone="warn">
-            Creating the quiz sends text to the cloud AI and may cost money.{" "}
-            <Link href="/settings" className="font-medium underline">
-              Allow it in Settings
-            </Link>
-            .
-          </Notice>
-        ) : null}
         {error ? (
           <Notice tone="error">
             <span className="block">{error}</span>
             {offlineRetry ? (
               <span className="mt-2 block">
                 <Button size="sm" variant="secondary" onClick={() => void run(true)}>
-                  Make it with offline rules instead
+                  Make a basic version without AI
                 </Button>
                 <span className="ms-2 text-xs">
                   Rule-based, not written by an AI model, and labelled as such.
@@ -305,8 +280,6 @@ export function QuizSetup() {
               busy ||
               types.length === 0 ||
               blocked ||
-              needsConsent ||
-              topicOffline ||
               (source === "topic" && topic.trim().length < 2)
             }
             onClick={() => void run(false)}

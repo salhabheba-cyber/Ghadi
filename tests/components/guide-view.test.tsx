@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import { GuideView } from "@/components/study/guide-view";
 import { layoutFlow } from "@/components/study/flow-diagram";
 import { UiProvider } from "@/components/ui/primitives";
+import { loadSettings, saveSettings } from "@/lib/storage/repo";
 import type { StudyGuide } from "@/lib/validation/schemas";
 
 const iso = "2026-10-21T10:00:00.000Z";
@@ -199,10 +200,54 @@ describe("GuideView", () => {
     expect(onRegenerate).toHaveBeenCalled();
   });
 
-  it("explains honestly when 'simpler' needs an AI model (offline generator)", async () => {
+  it("asks for permission before sending a passage to OpenAI, and sends nothing if declined", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
     const { user } = setup();
     await user.click(screen.getAllByRole("button", { name: "Explain simpler" })[0]!);
-    expect(await screen.findByText(/needs an AI model/)).toBeInTheDocument();
+    const dialog = await screen.findByRole("dialog", { name: /Use OpenAI/ });
+    expect(within(dialog).getByText(/may cost money/)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: /Cancel|No|Not now/i }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows OpenAI's real simpler explanation after consent", async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({ text: JSON.stringify({ text: "Plants use sunlight to make food." }) }),
+        ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { user } = setup();
+    await user.click(screen.getAllByRole("button", { name: "Explain simpler" })[0]!);
+    const dialog = await screen.findByRole("dialog", { name: /Use OpenAI/ });
+    await user.click(within(dialog).getByRole("button", { name: "Allow and continue" }));
+    expect(await screen.findByText(/Plants use sunlight to make food/)).toBeInTheDocument();
+    const body = JSON.parse(
+      (fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string,
+    );
+    expect(body).toMatchObject({ task: "simplify", consent: true });
+    vi.unstubAllGlobals();
+  });
+
+  it("never shows the original sentence as the explanation, and reports the failure", async () => {
+    await saveSettings({ ...(await loadSettings()), hostedConsent: true });
+    vi.stubGlobal(
+      "fetch",
+      async () =>
+        new Response(
+          JSON.stringify({
+            text: JSON.stringify({ text: "Plants capture light. ".repeat(15).trim() }),
+          }),
+        ),
+    );
+    const { user } = setup();
+    await user.click(screen.getAllByRole("button", { name: "Explain simpler" })[0]!);
+    expect(await screen.findByText(/only repeated the passage/)).toBeInTheDocument();
+    expect(screen.queryByText(/In simpler words/)).toBeNull();
+    vi.unstubAllGlobals();
   });
 
   it("hides the quiz link when the source document is gone", () => {

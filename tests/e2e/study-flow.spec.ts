@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import { mockOpenAi } from "./mock-openai";
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "photosynthesis.txt");
 
@@ -12,7 +13,7 @@ async function importFixture(page: Page) {
   });
 }
 
-test.describe("Ghadi core study flow (offline, no AI key)", () => {
+test.describe("Ghadi core study flow (OpenAI mocked in the browser)", () => {
   test("home screen opens the app's real pages", async ({ page }) => {
     await page.goto("/");
     await expect(page.getByRole("heading", { level: 1 })).toContainText("study");
@@ -26,15 +27,26 @@ test.describe("Ghadi core study flow (offline, no AI key)", () => {
   });
 
   test("import → notes → quiz → flashcards → persistence → backup/restore", async ({ page }) => {
+    const ai = await mockOpenAi(page);
     await importFixture(page);
+    // Importing never starts a paid AI request.
+    expect(ai.tasks).toEqual([]);
     await expect(page.getByText("words", { exact: false }).first()).toBeVisible();
 
-    // Notes (heuristic, clearly labelled)
-    await page.getByRole("button", { name: "Quick study notes" }).click();
+    // Basic notes without AI are available, only when asked for, and clearly labelled.
+    await page.getByRole("button", { name: "Make basic notes without AI" }).click();
     await expect(page).toHaveURL(/\/notes\/.+/, { timeout: 15_000 });
     await expect(page.getByText("Offline heuristics").first()).toBeVisible();
     await expect(page.getByText("No AI model was used", { exact: false }).first()).toBeVisible();
+    expect(ai.tasks).toEqual([]);
+
+    // Notes from OpenAI: asks permission first, then labels the result as OpenAI's.
+    await page.goBack();
+    await page.getByRole("button", { name: "Quick study notes" }).click();
+    await expect(page).toHaveURL(/\/notes\/.+/, { timeout: 15_000 });
+    await expect(page.getByText("OpenAI", { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("heading", { name: "Definitions" })).toBeVisible();
+    expect(ai.tasks).toContain("notes");
 
     // Quiz
     await page.goto("/documents");

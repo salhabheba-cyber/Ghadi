@@ -108,14 +108,14 @@ describe("groundBlocks", () => {
     const blocks: GuideBlock[] = [
       {
         type: "definition",
-        term: "A",
-        definition: "d",
+        term: "Chlorophyll",
+        definition: "The pigment that absorbs red and blue light.",
         sourceExcerpt: "absorbs red and blue light",
       },
       {
         type: "definition",
-        term: "B",
-        definition: "d",
+        term: "Chloroplast",
+        definition: "The organelle in which leaf cells capture light.",
         sourceExcerpt: "this sentence never appeared anywhere",
       },
     ];
@@ -196,7 +196,7 @@ describe("mergeSections", () => {
 
 describe("generateStudyGuide (hosted AI, mocked)", () => {
   beforeEach(async () => {
-    await saveSettings({ ...(await loadSettings()), provider: "hosted", hostedConsent: true });
+    await saveSettings({ ...(await loadSettings()), hostedConsent: true });
   });
 
   it("reads a long document chunk by chunk, grounds it, wraps it up and saves it", async () => {
@@ -267,7 +267,7 @@ describe("generateStudyGuide (offline)", () => {
     const d = await doc(
       "# Cells\n\nA cell is the basic unit of life. Cells contain a nucleus, which stores DNA.\n\n# Energy\n\nMitochondria make ATP for the cell.",
     );
-    const { item } = await generateStudyGuide(d);
+    const { item } = await generateStudyGuide(d, {}, { useOffline: true });
     expect(item.origin).toBe("heuristic");
     expect(item.notices[0]).toMatch(/not an explanation written by an AI/);
     expect(item.sections.length).toBeGreaterThan(0);
@@ -291,7 +291,7 @@ describe("generateStudyGuide (offline)", () => {
 describe("backup", () => {
   it("includes study guides and restores them", async () => {
     const d = await doc("Photosynthesis uses light. ".repeat(40));
-    const { item } = await generateStudyGuide(d);
+    const { item } = await generateStudyGuide(d, {}, { useOffline: true });
     const backup = parseBackup(JSON.stringify(await createBackup()));
     expect(backup.data.guides.map((g) => g.id)).toEqual([item.id]);
     __setDbForTests(new GhadiDB(`guide-restore-${Math.random()}`));

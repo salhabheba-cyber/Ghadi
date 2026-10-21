@@ -58,6 +58,7 @@ describe("OpenAI server calls", () => {
     baseUrl: "https://api.openai.test/v1",
     apiKey: KEY,
     model: "gpt-4.1-mini",
+    visionModel: "gpt-4.1",
   };
 
   it("sends the key as a bearer header to the configured base URL and returns the text", async () => {
@@ -122,14 +123,27 @@ describe("POST /api/ai/test", () => {
   it("makes a real request and reports provider, model and latency on success", async () => {
     vi.stubEnv("OPENAI_API_KEY", KEY);
     vi.stubEnv("OPENAI_MODEL", "gpt-4.1-mini");
-    const fetchMock = vi.fn(async () => completion("OK"));
+    let n = 0;
+    const fetchMock = vi.fn(async () => completion(n++ === 0 ? "OK" : "42"));
     vi.stubGlobal("fetch", fetchMock);
     const res = await testPost(req("/api/ai/test", {}));
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body).toMatchObject({ ok: true, provider: "openai", model: "gpt-4.1-mini" });
     expect(JSON.stringify(body)).not.toContain(KEY);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // One text request and one image request (the vision self-test).
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(body.vision).toMatchObject({ ok: true });
+  });
+  it("does not claim image reading works when the vision model misreads the test image", async () => {
+    vi.stubEnv("OPENAI_API_KEY", KEY);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => completion("OK")),
+    );
+    const body = await (await testPost(req("/api/ai/test", {}))).json();
+    expect(body.ok).toBe(true);
+    expect(body.vision.ok).toBe(false);
   });
   it("never reports success when the provider rejects the key", async () => {
     vi.stubEnv("OPENAI_API_KEY", KEY);

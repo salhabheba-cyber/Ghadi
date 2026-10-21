@@ -50,14 +50,21 @@ export function createClient(cfg: HostedConfig, timeoutMs = 60_000): OpenAI {
   });
 }
 
-/** Reasoning-style models (gpt-5*, o-series) reject `temperature` and use `max_completion_tokens`. */
+/** Reasoning-style models (gpt-5 and later, o-series) reject `temperature` and use `max_completion_tokens`. */
 export function isReasoningModel(model: string): boolean {
-  return /^(gpt-5|o\d)/i.test(model);
+  return /^(gpt-[5-9]|o\d)/i.test(model);
+}
+
+/** An image sent for transcription, as a data URL (never a remote URL, so nothing is fetched by the provider). */
+export interface ImageInput {
+  dataUrl: string;
 }
 
 export interface ChatCall {
   system: string;
   user: string;
+  /** Images attached to the user message (vision requests). */
+  images?: ImageInput[];
   json?: boolean;
   maxTokens?: number;
   temperature?: number;
@@ -70,11 +77,23 @@ export function buildChatParams(model: string, call: ChatCall) {
     model,
     messages: [
       { role: "system" as const, content: call.system },
-      { role: "user" as const, content: call.user },
+      {
+        role: "user" as const,
+        content: call.images?.length
+          ? [
+              { type: "text" as const, text: call.user },
+              ...call.images.map((i) => ({
+                type: "image_url" as const,
+                image_url: { url: i.dataUrl, detail: "high" as const },
+              })),
+            ]
+          : call.user,
+      },
     ],
     ...(call.json ? { response_format: { type: "json_object" as const } } : {}),
     ...(reasoning
-      ? { max_completion_tokens: limit }
+      ? // Low effort keeps structured-extraction answers fast; the limit also covers hidden reasoning tokens.
+        { max_completion_tokens: limit, reasoning_effort: "low" as const }
       : { max_tokens: limit, temperature: call.temperature ?? 0.2 }),
   };
 }
@@ -119,7 +138,7 @@ export function toAiError(error: unknown): AiError {
     if (status === 404 || code === "model_not_found") {
       return new AiError(
         "model-not-found",
-        "The configured AI model was not found or is not available to this account.",
+        "The configured OpenAI model was not found or is not available to this account. Set OPENAI_MODEL (text) or OPENAI_VISION_MODEL (images) on the server to a model your account can use.",
         502,
       );
     }
@@ -135,19 +154,26 @@ export function toAiError(error: unknown): AiError {
 /** Runs one non-streaming completion and returns the text. Throws AiError on any failure. */
 export async function completeText(
   call: ChatCall,
-  options: { cfg?: HostedConfig; timeoutMs?: number; signal?: AbortSignal } = {},
+  options: {
+    cfg?: HostedConfig;
+    timeoutMs?: number;
+    signal?: AbortSignal;
+    /** Use the vision model (set automatically when the call carries images). */
+    vision?: boolean;
+  } = {},
 ): Promise<{ text: string; model: string }> {
   const cfg = options.cfg ?? requireConfig();
+  const model = options.vision || call.images?.length ? cfg.visionModel : cfg.model;
   try {
     const client = createClient(cfg, options.timeoutMs);
-    const completion = await client.chat.completions.create(buildChatParams(cfg.model, call), {
+    const completion = await client.chat.completions.create(buildChatParams(model, call), {
       signal: options.signal,
     });
     const text = completion.choices[0]?.message?.content;
     if (typeof text !== "string" || text.trim().length === 0) {
       throw new AiError("bad-response", "The AI provider returned an empty answer.", 502);
     }
-    return { text, model: cfg.model };
+    return { text, model };
   } catch (error) {
     throw toAiError(error);
   }

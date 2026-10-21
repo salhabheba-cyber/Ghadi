@@ -20,7 +20,6 @@ import {
   type HostedStatus,
   type HostedTestResult,
 } from "@/lib/ai/hosted-client";
-import { testOllamaConnection, type OllamaConnectionResult } from "@/lib/ai/ollama";
 import { deckToCsv, downloadText } from "@/lib/export";
 import {
   MAX_BACKUP_BYTES,
@@ -42,8 +41,6 @@ export default function SettingsPage() {
   const [edits, setEdits] = useState<Partial<Settings>>({});
   const form: Settings = { ...saved, ...edits };
   const dirty = Object.keys(edits).length > 0;
-  const [ollama, setOllama] = useState<OllamaConnectionResult | null>(null);
-  const [testing, setTesting] = useState(false);
   const [hosted, setHosted] = useState<HostedStatus | null>(null);
   const [hostedTest, setHostedTest] = useState<HostedTestResult | null>(null);
   const [hostedTesting, setHostedTesting] = useState(false);
@@ -71,11 +68,6 @@ export default function SettingsPage() {
     } catch (e) {
       toast(errorMessage(e), "error");
     }
-  }
-  async function testOllama() {
-    setTesting(true);
-    setOllama(await testOllamaConnection(form.ollamaEndpoint, form.ollamaModel));
-    setTesting(false);
   }
   async function exportBackup() {
     try {
@@ -139,7 +131,7 @@ export default function SettingsPage() {
     <>
       <PageHeader
         title="Settings"
-        description="Choose how study material is generated and manage your data."
+        description="OpenAI permissions, review goals, and your data."
         actions={
           <Button onClick={() => void save()} disabled={!dirty}>
             Save settings
@@ -148,165 +140,78 @@ export default function SettingsPage() {
       />
       <div className="space-y-6">
         <Card className="space-y-4">
-          <h2 className="text-lg font-semibold">Generator</h2>
-          <fieldset className="space-y-2">
-            <legend className="sr-only">Generator</legend>
-            {(
-              [
-                [
-                  "offline",
-                  "Offline heuristics (default)",
-                  "Rule-based text analysis in your browser. No AI model, no network, fully private.",
-                ],
-                [
-                  "ollama",
-                  "Ollama (local AI)",
-                  "A language model on your own computer. Document text goes only to localhost.",
-                ],
-                [
-                  "hosted",
-                  "Hosted AI: OpenAI (cloud)",
-                  "Cloud-based. Sends document text to the AI provider configured on this Ghadi server. Needs your consent and may cost money.",
-                ],
-              ] as const
-            ).map(([value, label, hint]) => (
-              <label
-                key={value}
-                className="flex cursor-pointer items-start gap-3 rounded-lg border border-[var(--border)] p-3"
-              >
-                <input
-                  type="radio"
-                  name="provider"
-                  className="mt-1"
-                  checked={form.provider === value}
-                  onChange={() => update({ provider: value })}
-                />
-                <span>
-                  <span className="font-medium">{label}</span>
-                  <span className="block text-sm text-[var(--muted)]">{hint}</span>
-                </span>
-              </label>
-            ))}
-          </fieldset>
-
-          {form.provider === "ollama" ? (
-            <div className="space-y-3 rounded-lg bg-[var(--surface-2)] p-4">
-              <Field label="Ollama address">
-                {(id) => (
-                  <Input
-                    id={id}
-                    value={form.ollamaEndpoint}
-                    onChange={(e) => {
-                      update({ ollamaEndpoint: e.target.value });
-                      setOllama(null);
-                    }}
-                  />
-                )}
-              </Field>
-              <Field
-                label="Model name"
-                hint="Ghadi never downloads models. Install one yourself, e.g. “ollama pull llama3.2”."
-              >
-                {(id) => (
-                  <Input
-                    id={id}
-                    value={form.ollamaModel}
-                    onChange={(e) => {
-                      update({ ollamaModel: e.target.value });
-                      setOllama(null);
-                    }}
-                  />
-                )}
-              </Field>
-              <Button variant="secondary" disabled={testing} onClick={() => void testOllama()}>
-                {testing ? "Testing…" : "Test connection"}
-              </Button>
-              {ollama ? (
-                <Notice tone={ollama.ok ? "good" : "error"}>
-                  {ollama.message}
-                  {ollama.models.length > 0
-                    ? ` Installed: ${ollama.models.slice(0, 8).join(", ")}.`
-                    : ""}
-                </Notice>
-              ) : null}
-              <Notice tone="info">
-                Browsers block pages from calling Ollama unless it allows this site. Start Ollama
-                with OLLAMA_ORIGINS set to this site’s address (for example{" "}
-                <code>OLLAMA_ORIGINS=http://localhost:3000 ollama serve</code>).
+          <h2 className="text-lg font-semibold">AI engine: OpenAI</h2>
+          <p className="text-sm text-[var(--muted)]">
+            Ghadi uses OpenAI for explanations, study guides, quizzes, flashcards, “Explain
+            simpler”, and for reading photos and scans. Requests go through this app&apos;s server;
+            the API key stays on the server and is never sent to your browser.
+          </p>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
+            <dt className="text-[var(--muted)]">Text model</dt>
+            <dd>{hosted?.configured ? (hosted.model ?? "unknown") : "n/a"}</dd>
+            <dt className="text-[var(--muted)]">Vision model</dt>
+            <dd>
+              {hosted?.configured ? (hosted.visionModel ?? hosted.model ?? "unknown") : "n/a"}
+            </dd>
+            <dt className="text-[var(--muted)]">Status</dt>
+            <dd>
+              {hosted === null ? (
+                "checking…"
+              ) : hosted.configured ? (
+                <Badge tone="good">key configured on the server</Badge>
+              ) : (
+                <Badge tone="warn">not configured</Badge>
+              )}
+            </dd>
+          </dl>
+          {hosted && !hosted.configured ? (
+            <Notice tone="warn">
+              OpenAI is not set up on this server, so AI features show an error instead of results.
+              The server owner enables it by setting <code>OPENAI_API_KEY</code> (see .env.example).
+              Importing text files, text PDFs, Word and PowerPoint files still works without it.
+            </Notice>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              disabled={hostedTesting || hosted?.configured !== true}
+              onClick={() => void runHostedTest()}
+            >
+              {hostedTesting ? "Testing…" : "Test OpenAI (makes a tiny paid request)"}
+            </Button>
+          </div>
+          {hostedTest ? (
+            <div aria-live="polite">
+              <Notice tone={hostedTest.ok ? "good" : "error"}>
+                {hostedTest.ok
+                  ? `Connected: ${hostedTest.model} answered in ${hostedTest.latencyMs} ms.${
+                      hostedTest.vision
+                        ? hostedTest.vision.ok
+                          ? ` Image reading works (${hostedTest.vision.model}).`
+                          : ` Image reading failed: ${hostedTest.vision.message ?? "unknown error"}`
+                        : ""
+                    }`
+                  : hostedTest.message}
               </Notice>
             </div>
           ) : null}
-
-          {form.provider === "hosted" ? (
-            <div className="space-y-3 rounded-lg bg-[var(--surface-2)] p-4">
-              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-sm">
-                <dt className="text-[var(--muted)]">Provider</dt>
-                <dd>
-                  {hosted?.configured
-                    ? hosted.provider === "openai"
-                      ? "OpenAI"
-                      : "OpenAI-compatible service"
-                    : "None configured"}{" "}
-                  <Badge tone="warn">cloud</Badge>
-                </dd>
-                <dt className="text-[var(--muted)]">Model</dt>
-                <dd>{hosted?.configured ? (hosted.model ?? "unknown") : "n/a"}</dd>
-                <dt className="text-[var(--muted)]">Status</dt>
-                <dd>
-                  {hosted === null ? (
-                    "checking…"
-                  ) : hosted.configured ? (
-                    <Badge tone="good">configured on the server</Badge>
-                  ) : (
-                    <Badge tone="warn">not configured</Badge>
-                  )}
-                </dd>
-              </dl>
-              {hosted && !hosted.configured ? (
-                <Notice tone="warn">
-                  No hosted provider is set up on this server, so Ghadi uses offline heuristics. The
-                  server owner can enable OpenAI by setting <code>OPENAI_API_KEY</code> (see
-                  .env.example).
-                </Notice>
-              ) : null}
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="secondary"
-                  disabled={hostedTesting || hosted?.configured !== true}
-                  onClick={() => void runHostedTest()}
-                >
-                  {hostedTesting ? "Testing…" : "Test connection"}
-                </Button>
-              </div>
-              {hostedTest ? (
-                <div aria-live="polite">
-                  <Notice tone={hostedTest.ok ? "good" : "error"}>
-                    {hostedTest.ok
-                      ? `Connected: ${hostedTest.model} answered in ${hostedTest.latencyMs} ms.`
-                      : hostedTest.message}
-                  </Notice>
-                </div>
-              ) : null}
-              <label className="flex items-start gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-1"
-                  checked={form.hostedConsent}
-                  onChange={(e) => update({ hostedConsent: e.target.checked })}
-                />
-                <span>
-                  I understand that the text of documents I generate material from, and any prompts
-                  or quiz answers I send for AI help, will be sent to a third-party AI provider
-                  through this server, and that API usage may incur costs. API keys stay on the
-                  server and are never exposed to my browser.
-                </span>
-              </label>
-              <p className="text-xs text-[var(--muted)]">
-                If the hosted provider fails, Ghadi tells you and offers offline generation. It
-                never switches silently.
-              </p>
-            </div>
-          ) : null}
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={form.hostedConsent}
+              onChange={(e) => update({ hostedConsent: e.target.checked })}
+            />
+            <span>
+              I allow Ghadi to send the text of my material, and photos or scans I choose to read,
+              to OpenAI through this server. OpenAI API usage may cost money and is separate from
+              any ChatGPT subscription. Nothing is sent when I only upload a file.
+            </span>
+          </label>
+          <p className="text-xs text-[var(--muted)]">
+            If OpenAI fails, Ghadi shows the error and what to do next. It never switches to another
+            provider by itself. Basic no-AI versions are available only when you ask for them.
+          </p>
         </Card>
 
         <Card className="space-y-3">

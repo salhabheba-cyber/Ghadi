@@ -2,7 +2,7 @@
 import { ArrowLeft, Loader2, Sparkles, Square } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { GuideView } from "@/components/study/guide-view";
 import { TextReview } from "@/components/study/text-review";
 import {
@@ -17,7 +17,7 @@ import {
   useToast,
 } from "@/components/ui/primitives";
 import { useLive } from "@/hooks/use-live";
-import { useSettings } from "@/hooks/use-settings";
+import { useEnsureAiConsent } from "@/hooks/use-ai-consent";
 import {
   generateDeckFromDocument,
   generateStudyGuide,
@@ -27,6 +27,7 @@ import {
 import { ProviderError } from "@/lib/ai/types";
 import { getDocument, getGuideForDocument, saveGuide } from "@/lib/storage/repo";
 import { analyzeTextQuality } from "@/lib/study/quality";
+import { hashText } from "@/lib/study/hash";
 import { errorMessage } from "@/lib/utils";
 
 const LANGS = [
@@ -41,7 +42,7 @@ export default function StudyPage() {
   const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
-  const settings = useSettings();
+  const ensureConsent = useEnsureAiConsent();
   const { data: doc, loading: docLoading } = useLive(() => getDocument(id), [id]);
   const { data: guide, loading: guideLoading } = useLive(() => getGuideForDocument(id), [id]);
   const [language, setLanguage] = useState("same as source");
@@ -50,23 +51,14 @@ export default function StudyPage() {
   const [skipReview, setSkipReview] = useState(false);
   const [action, setAction] = useState<string | null>(null);
   const abort = useRef<AbortController | null>(null);
-  const started = useRef(false);
 
   const quality = useMemo(() => (doc ? analyzeTextQuality(doc.text) : null), [doc]);
   const generating = progress !== null;
-  const providerLabel =
-    settings.provider === "offline"
-      ? "offline rules (outline only)"
-      : settings.provider === "ollama"
-        ? `Ollama (${settings.ollamaModel})`
-        : "OpenAI / hosted AI";
-  const canAuto =
-    !!doc && doc.status === "ready" && quality?.level === "good" && !guide && !guideLoading;
-  const autoAllowed =
-    settings.provider === "offline" || settings.provider === "ollama" || settings.hostedConsent;
+  const stale = !!doc && !!guide?.sourceHash && guide.sourceHash !== hashText(doc.text);
 
-  async function generate() {
+  async function generate(useOffline = false) {
     if (!doc) return;
+    if (!useOffline && !(await ensureConsent("text"))) return;
     const controller = new AbortController();
     abort.current = controller;
     setError(null);
@@ -75,7 +67,7 @@ export default function StudyPage() {
       await generateStudyGuide(
         doc,
         { language, onProgress: setProgress },
-        { signal: controller.signal },
+        { signal: controller.signal, useOffline },
       );
       toast("Your study guide is ready.", "good");
     } catch (e) {
@@ -88,22 +80,6 @@ export default function StudyPage() {
       abort.current = null;
     }
   }
-  const generateRef = useRef(generate);
-  useEffect(() => {
-    generateRef.current = generate;
-  });
-
-  // Open the page and start teaching right away when that is free or already authorised.
-  useEffect(() => {
-    if (!canAuto || !autoAllowed || started.current) return;
-    const t = setTimeout(() => {
-      if (started.current) return;
-      started.current = true;
-      void generateRef.current();
-    }, 0);
-    return () => clearTimeout(t);
-  }, [canAuto, autoAllowed]);
-
   if (docLoading || guideLoading) return <p className="text-sm text-[var(--muted)]">Loading…</p>;
   if (!doc && !guide)
     return (
@@ -129,6 +105,7 @@ export default function StudyPage() {
   }
   async function flashcards() {
     if (!doc) return;
+    if (!(await ensureConsent("text"))) return;
     setAction("cards");
     try {
       const r = await generateDeckFromDocument(doc, 15);
@@ -194,23 +171,10 @@ export default function StudyPage() {
           <Card className="space-y-3">
             <h2 className="text-lg font-semibold">Teach me this material</h2>
             <p className="text-sm text-[var(--muted)]">
-              Generator: {providerLabel}. Change it in Settings.
+              Written by OpenAI through this app&apos;s server. Nothing is sent until you press the
+              button, and OpenAI API usage may cost money (it is separate from a ChatGPT
+              subscription).
             </p>
-            {settings.provider === "offline" ? (
-              <Notice tone="warn">
-                Offline mode can only build a rule-based outline. For a full, easy explanation with
-                examples and diagrams, choose OpenAI or Ollama in Settings.
-              </Notice>
-            ) : null}
-            {settings.provider === "hosted" && !settings.hostedConsent ? (
-              <Notice tone="warn">
-                Writing the guide sends your document text to the cloud AI and may cost money.{" "}
-                <Link href="/settings" className="font-medium underline">
-                  Allow it in Settings
-                </Link>
-                .
-              </Notice>
-            ) : null}
             <Field label="Explain in">
               {(fid) => (
                 <Select
@@ -228,12 +192,14 @@ export default function StudyPage() {
               )}
             </Field>
             {!generating ? (
-              <Button
-                onClick={() => void generate()}
-                disabled={settings.provider === "hosted" && !settings.hostedConsent}
-              >
-                <Sparkles className="h-4 w-4" aria-hidden /> Write my study guide
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => void generate()}>
+                  <Sparkles className="h-4 w-4" aria-hidden /> Write my study guide
+                </Button>
+                <Button variant="secondary" onClick={() => void generate(true)}>
+                  Basic outline (no AI)
+                </Button>
+              </div>
             ) : null}
           </Card>
         ) : null}
@@ -265,13 +231,23 @@ export default function StudyPage() {
         {error ? (
           <Notice tone="error">
             <span className="block">{error}</span>
-            {doc && !(settings.provider === "offline") ? (
-              <span className="mt-2 block">
+            {doc && !(error.startsWith("The text") || error.includes("not reliable")) ? (
+              <span className="mt-2 flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" onClick={() => void generate()}>
-                  Try again
+                  Try OpenAI again
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => void generate(true)}>
+                  Make a basic outline without AI
                 </Button>
               </span>
             ) : null}
+          </Notice>
+        ) : null}
+
+        {guide && stale ? (
+          <Notice tone="warn">
+            The text of this document changed (for example you corrected it) after this guide was
+            written. Write the guide again to use the corrected text.
           </Notice>
         ) : null}
 

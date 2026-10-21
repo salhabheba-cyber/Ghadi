@@ -1,10 +1,17 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
 import path from "node:path";
+import { mockOpenAi } from "./mock-openai";
 
 const FIXTURE = path.join(__dirname, "..", "fixtures", "photosynthesis.txt");
 
 async function scan(page: import("@playwright/test").Page, label: string) {
+  // Let fade-in animations (toasts, dialogs) finish so contrast is measured on settled colours.
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every((a) => a.playState !== "running" || a.effect?.getTiming().iterations === Infinity),
+  );
   const results = await new AxeBuilder({ page })
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
     .analyze();
@@ -20,6 +27,7 @@ async function scan(page: import("@playwright/test").Page, label: string) {
 
 for (const theme of ["light", "dark"] as const) {
   test(`no WCAG A/AA violations across the app (${theme})`, async ({ page }) => {
+    await mockOpenAi(page);
     await page.addInitScript((t) => localStorage.setItem("ghadi-theme", t), theme);
     await page.goto("/");
     await scan(page, "landing");

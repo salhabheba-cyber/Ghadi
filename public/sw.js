@@ -8,7 +8,7 @@
  *  - Everything else (incl. /manifest.webmanifest)         → network-first, so manifest/icon updates are seen
  */
 
-const CACHE_VERSION = "ghadi-v6";
+const CACHE_VERSION = "ghadi-v7";
 const STATIC_CACHE = `${CACHE_VERSION}-static`;
 const PAGE_CACHE = `${CACHE_VERSION}-pages`;
 

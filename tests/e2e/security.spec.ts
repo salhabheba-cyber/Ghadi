@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
+import { mockOpenAi } from "./mock-openai";
 
 const FIXTURES = path.join(__dirname, "..", "fixtures");
 const TEXT_FIXTURE = path.join(FIXTURES, "photosynthesis.txt");
@@ -64,6 +65,7 @@ test.describe("response headers", () => {
 
 test.describe("script safety in the real browser", () => {
   test("the whole app runs with zero CSP violations or script errors", async ({ page }) => {
+    await mockOpenAi(page);
     const problems = await watch(page);
     await page.goto("/");
     await page.goto("/documents");
@@ -101,6 +103,7 @@ test.describe("script safety in the real browser", () => {
   });
 
   test("hostile imported text is displayed as text and never executes", async ({ page }) => {
+    await mockOpenAi(page);
     const problems = await watch(page);
     const payload = [
       "Cells are the basic unit of life, and every organism is made of cells that carry out many functions.",

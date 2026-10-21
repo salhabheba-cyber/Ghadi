@@ -148,10 +148,34 @@ export function decodeBody(body: Buffer, charset: string | null, html?: boolean)
  * Converts already-extracted HTML (e.g. from a DOCX conversion) into study text: headings become
  * markdown headings, list items become bullets, table cells become lines.
  */
+function caret(mark: "^" | "_", raw: string): string {
+  const t = raw.replace(/<[^>]*>/g, "").trim();
+  if (!t) return "";
+  return /^[\w+\-−]$/.test(t) || /^[-+−]?\d+$/.test(t) ? `${mark}${t}` : `${mark}(${t})`;
+}
+
 export function htmlToStudyText(html: string): string {
   const cleaned = html
     .replace(/<!--[\s\S]*?-->/g, " ")
-    .replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, " ");
+    .replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, " ")
+    // Superscripts/subscripts survive as x^2 and H_2 instead of silently becoming x2 and H2.
+    .replace(/<sup\b[^>]*>([\s\S]*?)<\/sup\s*>/gi, (_m, t: string) => caret("^", t))
+    .replace(/<sub\b[^>]*>([\s\S]*?)<\/sub\s*>/gi, (_m, t: string) => caret("_", t))
+    // A table row stays one line ("a | b | c") so rows do not dissolve into unrelated lines.
+    .replace(/<tr\b[^>]*>([\s\S]*?)<\/tr\s*>/gi, (_m, row: string) => {
+      const cells = Array.from(row.matchAll(/<t[dh]\b[^>]*>([\s\S]*?)<\/t[dh]\s*>/gi)).map((c) =>
+        stripTags(c[1] ?? ""),
+      );
+      return cells.some(Boolean) ? `<p>${cells.join(" | ")}</p>` : "";
+    })
+    // Ordered lists keep their numbers.
+    .replace(/<ol\b[^>]*>([\s\S]*?)<\/ol\s*>/gi, (_m, list: string) => {
+      let n = 0;
+      return list.replace(
+        /<li\b[^>]*>([\s\S]*?)<\/li\s*>/gi,
+        (_i, t: string) => `<p>${++n}. ${t}</p>`,
+      );
+    });
   const lines: string[] = [];
   for (const m of cleaned.matchAll(
     /<(h[1-6]|p|li|blockquote|pre|td|th|dt|dd)\b[^>]*>([\s\S]*?)<\/\1\s*>/gi,

@@ -42,7 +42,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      # No AI environment variables are set: the app must work without any AI key.
+      # No AI key is set. OpenAI is mocked in the browser (tests/e2e/mock-openai.ts); no real OpenAI request is made in CI.
       - run: npm run test:e2e
         env:
           CI: "true"

@@ -7,7 +7,7 @@
  *   'wasm-unsafe-eval' is required to run WebAssembly (PDF.js and the OCR engine); it does not allow JS eval.
  * - Styles: stylesheets are same-origin (nonce for framework styles). Inline style="" attributes
  *   (used for chart bar heights) are allowed via style-src-attr only; <style> elements are not.
- * - connect-src: this origin, localhost (the optional Ollama provider), and jsDelivr for OCR language
+ * - connect-src: this origin and jsDelivr for OCR language
  *   DATA of languages other than English (data only; the user is asked first). English OCR is bundled.
  */
 export function buildCsp(nonce: string, opts: { isDev?: boolean } = {}): string {
@@ -20,7 +20,7 @@ export function buildCsp(nonce: string, opts: { isDev?: boolean } = {}): string 
     "img-src 'self' data: blob:",
     "font-src 'self' data:",
     "worker-src 'self' blob:",
-    "connect-src 'self' http://localhost:* http://127.0.0.1:* https://cdn.jsdelivr.net",
+    "connect-src 'self' https://cdn.jsdelivr.net",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",

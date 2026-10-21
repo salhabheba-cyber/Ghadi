@@ -18,6 +18,7 @@ import {
   type ProgressFn,
 } from "./extractors";
 import { ocrImage, ocrPdf } from "./ocr";
+import { visionImage, visionPdf, type PostImages } from "./vision-extract";
 
 export interface ProcessedDocument {
   title: string;
@@ -36,6 +37,11 @@ export interface ProcessOptions {
   onProgress?: ProgressFn;
   /** Set only after the user agreed to let the OCR engine download language data. */
   ocr?: { language: string };
+  /**
+   * Set only after the user chose "Read with OpenAI" and agreed to send the image/pages. `post` is
+   * for tests; the app uses the default, which calls Ghadi's server.
+   */
+  vision?: { post?: PostImages; signal?: AbortSignal };
 }
 
 function finish(
@@ -58,9 +64,9 @@ function finish(
   const hasText = text.trim().length > 0;
   if (!hasText) return { ...p, text, warnings, status: "empty" };
 
-  // Run source quality validation before marking the document as study-ready.
-  // This catches garbled PDFs, encoding corruption, and metadata-only content
-  // before any heuristic or AI generator has a chance to produce nonsense.
+  // Unreliable text is kept (so the learner can compare, correct or re-import) and flagged. It stays
+  // "ready" so it appears in the library; generation is blocked later by the same quality gate and
+  // the Study screen shows what is wrong and how to fix it.
   const quality = validateSourceQuality(text);
   if (!quality.ok) {
     return {
@@ -69,9 +75,9 @@ function finish(
       warnings: [
         ...warnings,
         quality.reason ??
-          "We couldn't extract readable text from this document. Try uploading a text-based PDF, another supported format, or a clearer scan.",
+          "This text looks unreliable. Review and correct it, or upload a clearer file.",
       ],
-      status: "empty",
+      status: "ready",
     };
   }
 
@@ -131,6 +137,17 @@ export async function processFile(
     case "pdf": {
       const r = await extractPdf(buffer, options.onProgress);
       if (looksScanned(r.text, r.pageCount ?? 0)) {
+        if (options.vision) {
+          const v = await visionPdf(buffer, { onProgress: options.onProgress, ...options.vision });
+          return finish({
+            ...base,
+            kind,
+            text: v.text,
+            pageCount: v.pageCount,
+            extractionMethod: "vision",
+            warnings: [...r.warnings, ...v.warnings],
+          });
+        }
         if (options.ocr) {
           const o = await ocrPdf(buffer, options.ocr.language, options.onProgress);
           return finish({
@@ -165,6 +182,17 @@ export async function processFile(
       });
     }
     case "image": {
+      if (options.vision) {
+        const v = await visionImage(file, { onProgress: options.onProgress, ...options.vision });
+        return finish({
+          ...base,
+          kind,
+          text: v.text,
+          pageCount: 1,
+          extractionMethod: "vision",
+          warnings: v.warnings,
+        });
+      }
       if (!options.ocr) {
         throw new DocumentProcessingError(
           "Reading text from an image needs the optional OCR engine. Allow OCR and choose a language, then try again.",

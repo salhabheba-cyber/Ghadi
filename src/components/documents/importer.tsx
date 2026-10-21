@@ -25,6 +25,8 @@ import {
   toStudyDocument,
   type ProcessedDocument,
 } from "@/lib/document-processing/process";
+import { useEnsureAiConsent } from "@/hooks/use-ai-consent";
+import { fetchHostedStatus } from "@/lib/ai/hosted-client";
 import { saveDocument } from "@/lib/storage/repo";
 import { cn, errorMessage } from "@/lib/utils";
 
@@ -48,6 +50,8 @@ export function Importer({
   hideTabs?: boolean;
 }) {
   const toast = useToast();
+  const ensureConsent = useEnsureAiConsent();
+  const [visionReady, setVisionReady] = useState(false);
   const [tab, setTab] = useState<Tab>(initialTab);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -69,11 +73,15 @@ export function Importer({
     onImported(doc.id);
   }
 
-  async function importOne(file: File, ocr?: { language: string }) {
+  async function importOne(file: File, mode?: { ocr?: { language: string }; vision?: boolean }) {
     setError(null);
     setBusy(`Reading ${file.name}`);
     try {
-      const p = await processFile(file, { onProgress: progress, ocr });
+      const p = await processFile(file, {
+        onProgress: progress,
+        ocr: mode?.ocr,
+        vision: mode?.vision ? {} : undefined,
+      });
       if (p.status === "needs-ocr") {
         setOcrFile(file);
         return;
@@ -103,6 +111,14 @@ export function Importer({
       setBusy(null);
     }
   }
+
+  useEffect(() => {
+    let live = true;
+    void fetchHostedStatus().then((st) => live && setVisionReady(st.configured === true));
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const startedRef = useRef(false);
   useEffect(() => {
@@ -201,7 +217,7 @@ export function Importer({
           {ocrFile ? (
             <div className="mt-4 space-y-3 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm dark:border-amber-700 dark:bg-amber-900/20">
               <p>
-                <strong>{ocrFile.name}</strong> needs OCR (text recognition) to be read.
+                <strong>{ocrFile.name}</strong> needs text recognition to be read. Choose how.
               </p>
               <p className="text-[var(--muted)]" data-testid="ocr-notice">
                 {isBundledOcrLanguage(ocrLang)
@@ -219,18 +235,40 @@ export function Importer({
                   </Select>
                 )}
               </Field>
-              <div className="flex gap-2">
+              {visionReady ? (
+                <p className="text-[var(--muted)]">
+                  “Read with OpenAI” sends this image to OpenAI through Ghadi&apos;s server only
+                  when you press it. It reads fractions, exponents and tables far better than
+                  on-device OCR but may cost money (separate from ChatGPT).
+                </p>
+              ) : null}
+              <div className="flex flex-wrap gap-2">
                 <Button
                   onClick={() => {
                     const f = ocrFile;
                     setOcrFile(null);
-                    void importOne(f, { language: ocrLang });
+                    void importOne(f, { ocr: { language: ocrLang } });
                   }}
                 >
                   {isBundledOcrLanguage(ocrLang)
                     ? "Read file with OCR"
                     : "Download language data and read file"}
                 </Button>
+                {visionReady ? (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      const f = ocrFile;
+                      void ensureConsent("images").then((ok) => {
+                        if (!ok) return;
+                        setOcrFile(null);
+                        void importOne(f, { vision: true });
+                      });
+                    }}
+                  >
+                    Read with OpenAI (best for maths and tables)
+                  </Button>
+                ) : null}
                 <Button variant="secondary" onClick={() => setOcrFile(null)}>
                   Cancel
                 </Button>
