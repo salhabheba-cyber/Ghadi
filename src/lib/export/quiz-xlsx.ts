@@ -78,7 +78,7 @@ function buildQuestionsSheet(
 
   if (data.subject) {
     const subRow = ws.addRow([`Subject: ${data.subject}`]);
-    subRow.getCell(1).font = { italics: true, color: { argb: MUTED_ARGB } };
+    subRow.getCell(1).font = { italic: true, color: { argb: MUTED_ARGB } };
     ws.mergeCells(`A${subRow.number}:D${subRow.number}`);
   }
 
@@ -156,7 +156,7 @@ function buildQuestionsSheet(
   // ── Footer ──
   ws.addRow([]);
   const ftRow = ws.addRow(["Generated with Ghadi — Learn Smarter. Remember More. Stay Free."]);
-  ftRow.getCell(1).font = { color: { argb: MUTED_ARGB }, size: 8, italics: true };
+  ftRow.getCell(1).font = { color: { argb: MUTED_ARGB }, size: 8, italic: true };
   ws.mergeCells(`A${ftRow.number}:D${ftRow.number}`);
 }
 
@@ -208,7 +208,7 @@ function buildAnswerKeySheet(
     row.getCell(1).font = { bold: true };
     row.getCell(4).font = { bold: true, color: { argb: CORRECT_ARGB } };
     if (data.includeExplanations) {
-      row.getCell(5).font = { italics: true, color: { argb: MUTED_ARGB } };
+      row.getCell(5).font = { italic: true, color: { argb: MUTED_ARGB } };
     }
     row.eachCell((cell) => {
       cell.alignment = { wrapText: true, vertical: "top" };
