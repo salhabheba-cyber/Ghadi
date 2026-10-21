@@ -23,7 +23,7 @@ jobs:
       # private ones). We save the SARIF as an artifact instead so the results
       # are always available without that permission.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: github/codeql-action/init@v3
         with:
