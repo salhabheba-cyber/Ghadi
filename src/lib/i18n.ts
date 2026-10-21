@@ -24,6 +24,7 @@ type Dict = {
   quickQuiz: string;
   studyNotes: string;
   reviewCards: string;
+  readingClub: string;
   settings: string;
   language: string;
   xp: string;
@@ -75,6 +76,7 @@ export const DICTIONARY: Record<Language, Dict> = {
     quickQuiz: "Quick Quiz",
     studyNotes: "Study Notes",
     reviewCards: "Review Cards",
+    readingClub: "School Reading",
     settings: "Settings",
     language: "Language",
     xp: "XP",
@@ -133,6 +135,7 @@ export const DICTIONARY: Record<Language, Dict> = {
     quickQuiz: "Quiz rapide",
     studyNotes: "Notes d'étude",
     reviewCards: "Réviser les cartes",
+    readingClub: "Lecture à l'école",
     settings: "Paramètres",
     language: "Langue",
     xp: "XP",
@@ -192,6 +195,7 @@ export const DICTIONARY: Record<Language, Dict> = {
     quickQuiz: "اختبار سريع",
     studyNotes: "ملاحظات الدراسة",
     reviewCards: "مراجعة البطاقات",
+    readingClub: "القراءة المدرسية",
     settings: "الإعدادات",
     language: "اللغة",
     xp: "نقاط الخبرة",

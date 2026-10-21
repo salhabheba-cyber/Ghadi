@@ -203,6 +203,11 @@ function Home() {
                 <Brain aria-hidden /> {t.reviewCards}
               </Link>
             </li>
+            <li>
+              <Link href="/read">
+                <Library aria-hidden /> {t.readingClub}
+              </Link>
+            </li>
           </ul>
         </div>
       </main>

@@ -40,6 +40,11 @@ This document explains what Ghadi protects, who might attack it, and which contr
 | 15  | Committed secrets                                           | `.gitignore`, empty `.env.example`, gitleaks in CI                                                                                                                         | Secrets pasted into issues or logs by users                         |
 | 16  | Local data theft from the device                            | Out of scope: relies on OS account and browser profile protection; no encryption at rest                                                                                   | Anyone with profile access can read data                            |
 
+| 17 | Guessing Student IDs or staff passwords | 60-bit random IDs stored hashed; scrypt; per-account lockout (5 failures, 15 min); DB-backed per-IP and per-account rate limits | Per-IP limits need `GHADI_TRUST_PROXY` behind a trusted proxy |
+| 18 | Cross-school data access (IDOR) | School scope taken from the signed-in actor; every query filtered by it; cross-school ids return 404; tests and a browser journey assert it | A future query written without the scope; review |
+| 19 | Gaming completions (skipping, idle tabs) | Server-side 90% position, active-time heartbeats (5-45 s gaps), comprehension check with attempt cap, teacher void/restore audited | A determined child can still read quickly and pass the check |
+| 20 | Child data sent to AI | Consent required, passage and title only, moderation fail-closed, key server-side, evidence quotes verified | Prompt injection in book text can skew an answer |
+
 ## Out of scope
 
 - A compromised user device, browser or browser extensions.

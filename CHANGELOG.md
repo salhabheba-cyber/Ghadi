@@ -6,6 +6,15 @@ All notable changes are documented here. The format follows [Keep a Changelog](h
 
 First public version.
 
+### Added (School Reading platform)
+
+- Multilingual (Arabic RTL, French, English) school reading platform for ages 3-18: 241 stored books with licences and attribution, reader with TOC, bookmarks, resume, search, read-aloud and display controls, student dashboard (Home, My Books, Explore, Progress).
+- Generated Ghadi Student IDs with optional PIN, lockout and database rate limits; staff invites, schools, classes, join codes, approval, teacher ID reissue and audit log; platform admin dashboard (counts only).
+- Completion tracking (90% reached, active time, comprehension check, one record per student and book), per-school Top 5 with configurable prizes and a neutral badge fallback.
+- Optional server-side OpenAI reading companion with consent, moderation and verified evidence.
+- PostgreSQL (`pg`) with forward-only migrations; embedded PGlite for tests and opt-in development.
+- Docs: [READING_PLATFORM](docs/READING_PLATFORM.md), [BOOK_SOURCES](docs/BOOK_SOURCES.md).
+
 ### Changed (AI and text quality)
 
 - OpenAI is the only AI engine, server-side, with centrally configured text (`OPENAI_MODEL`) and vision (`OPENAI_VISION_MODEL`) models. The Ollama provider and the provider setting were removed; failures are shown and never silently replaced by another provider or by heuristics.

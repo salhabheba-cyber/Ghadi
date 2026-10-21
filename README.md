@@ -144,6 +144,10 @@ If your environment already has a Chromium build, point Playwright at it with `P
 
 Unit tests cover scheduling, grading, generation, storage, backup, validation, AI provider handling (with a fake `fetch`), HTML/YouTube parsing, PPTX extraction, SSRF and the rate limiter. Component tests cover dialogs, the quiz player/results and the flashcard session. Playwright drives the real built app through import → notes → quiz → flashcards → reload → backup → wipe → restore, with no AI configuration, plus axe accessibility scans.
 
+## School Reading platform
+
+Ghadi also includes a multilingual (Arabic, French, English) school reading platform for ages 3-18: 241 stored books with licences, a full reader, generated Ghadi Student IDs, schools and classes with enforced boundaries, accurate completion tracking, a per-school Top 5 and optional AI help. It needs PostgreSQL (`DATABASE_URL`) and a one-time `GHADI_SETUP_TOKEN`. Start at `/read`, `/join`, `/staff` and `/admin`. Details: [docs/READING_PLATFORM.md](docs/READING_PLATFORM.md), [docs/BOOK_SOURCES.md](docs/BOOK_SOURCES.md). For local development without a database set `GHADI_DEV_DB=pglite`.
+
 ## 16. Deployment
 
 Ghadi needs a Node.js server (Vercel, a container, any Node host) because of its two API routes. Static export is **not** supported. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).

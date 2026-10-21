@@ -38,6 +38,19 @@ Hosted AI is enabled when `OPENAI_API_KEY` is set, or when **all four** `GHADI_H
 
 On Railway: service → Variables → add `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`), then redeploy.
 
+## School Reading platform (database)
+
+The reading platform needs PostgreSQL. Without `DATABASE_URL` the study tools still work, but `/read`, `/join`, `/login`, `/school` and `/admin` report that the database is not configured.
+
+| Variable            | Purpose                                                                                             |
+| ------------------- | --------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`      | PostgreSQL connection string (secret, server only). Migrations and the book catalog apply on start. |
+| `GHADI_SETUP_TOKEN` | 16+ characters you choose; creates the first platform administrator once. Secret, server only.      |
+| `GHADI_TRUST_PROXY` | Set to `true` on Railway so per-IP rate limits and lockouts see the real client address.            |
+| `OPENAI_API_KEY`    | Optional; enables the reading companion (child consent still required).                             |
+
+On Railway: add a PostgreSQL service, reference its `DATABASE_URL` from the web service, set `GHADI_SETUP_TOKEN` and `GHADI_TRUST_PROXY=true` in the private variables, redeploy, then open `/admin` and follow the first-run steps. Book files (about 51 MB in `public/books`) ship with the image; the catalog rows are seeded idempotently at start. See [READING_PLATFORM.md](READING_PLATFORM.md).
+
 ## HTTPS
 
 Serve over HTTPS in production. The app sends a per-request, nonce-based Content-Security-Policy from `src/proxy.ts` (no `unsafe-inline` or `unsafe-eval` scripts) plus HSTS, COOP/CORP and other headers from `next.config.ts`. Because the nonce changes on every request, pages are rendered on demand and cannot be statically exported or cached by a CDN as HTML.

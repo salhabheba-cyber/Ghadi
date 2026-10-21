@@ -21,6 +21,17 @@ Only in these cases, each triggered by something you do:
 
 If none of these are used, no study content ever leaves the browser.
 
+## School Reading platform (server-side data)
+
+The reading platform is different from the study tools: it stores data on the server's PostgreSQL database because teachers and schools need it.
+
+- **Stored:** display name, language, school and class, the hash and hint of the Student ID, optional PIN hash, reading position, bookmarks, active reading seconds, check results, completions, audit entries. No email, birth date, address or photo is collected from students.
+- **Staff:** name, email, password hash.
+- **Who sees it:** a student sees their own data; teachers see their classes; a school admin sees their school; the platform admin sees counts only. Other schools never see it.
+- **Leaderboard:** private to the school; names follow the school's format and a child can hide theirs.
+- **AI companion:** off by default; requires the child's consent. Only the selected passage and the book title are sent to OpenAI.
+- Reading preferences and language stay in the browser's `localStorage`. Operators are responsible for local child-privacy law (for example parental consent rules) when deploying for schools.
+
 ## Your controls
 
 - **Settings → Download full backup** exports everything as JSON.

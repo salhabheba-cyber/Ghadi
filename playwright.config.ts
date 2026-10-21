@@ -1,4 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
+import os from "node:os";
+import path from "node:path";
 
 const port = 3100;
 
@@ -31,6 +33,13 @@ export default defineConfig({
     command: `npm run build && npx next start -p ${port}`,
     url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
+    // A throw-away embedded Postgres (PGlite) so the school-reading flows run against real SQL, with a fresh database per run.
+    env: {
+      GHADI_DEV_DB: "pglite",
+      GHADI_DEV_DB_DIR: path.join(os.tmpdir(), `ghadi-e2e-db-${process.pid}`),
+      GHADI_SETUP_TOKEN: "e2e-setup-token-0123456789",
+      GHADI_TRUST_PROXY: "false",
+    },
     timeout: 240_000,
   },
 });

@@ -24,3 +24,4 @@ test-results/
 
 # generated OCR assets (npm run ocr:assets)
 public/ocr/
+.ghadi-dev-db/
