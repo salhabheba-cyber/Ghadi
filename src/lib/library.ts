@@ -1,4 +1,4 @@
-export type ItemType = "document" | "note" | "quiz" | "deck";
+export type ItemType = "document" | "guide" | "note" | "quiz" | "deck";
 
 export interface LibraryItem {
   key: string;
@@ -25,6 +25,7 @@ export interface LibraryFilter {
 
 export const TYPE_LABEL: Record<ItemType, string> = {
   document: "Document",
+  guide: "Study guide",
   note: "Note",
   quiz: "Quiz",
   deck: "Deck",

@@ -163,7 +163,7 @@ describe("POST /api/ai/generate", () => {
       json({ choices: [{ message: { content: JSON.stringify({ text: "ok" }) } }] }),
     );
     const headers = { "x-forwarded-for": "203.0.113.9" };
-    for (let i = 0; i < 10; i++)
+    for (let i = 0; i < 40; i++)
       expect((await generatePost(req("/api/ai/generate", goodSummaryBody, headers))).status).toBe(
         200,
       );

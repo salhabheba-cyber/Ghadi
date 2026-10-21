@@ -65,7 +65,8 @@ export interface ScoreResult {
 
 /** AI check results keyed by question ID — when present, they override local grading. */
 export interface AiCheckMap {
-  [questionId: string]: { loading: boolean; result: { correct: boolean } | null; error: string | null } | undefined;
+  [questionId: string]:
+    { loading: boolean; result: { correct: boolean } | null; error: string | null } | undefined;
 }
 
 export function scoreQuiz(
@@ -79,8 +80,7 @@ export function scoreQuiz(
 
     // If an AI result exists for this question, use it; otherwise fall back to local grading.
     const aiEntry = aiChecks?.[q.id];
-    const correct =
-      aiEntry?.result != null ? aiEntry.result.correct : gradeResponse(q, response);
+    const correct = aiEntry?.result != null ? aiEntry.result.correct : gradeResponse(q, response);
 
     return {
       questionId: q.id,

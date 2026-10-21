@@ -33,7 +33,7 @@ for (const theme of ["light", "dark"] as const) {
     await expect(page.getByRole("heading", { level: 1, name: "photosynthesis" })).toBeVisible();
     await scan(page, "document");
 
-    await page.getByRole("button", { name: "Generate notes" }).click();
+    await page.getByRole("button", { name: "Quick study notes" }).click();
     await page.waitForURL(/\/notes\//);
     await expect(page.getByRole("heading", { name: "Definitions" })).toBeVisible();
     await scan(page, "note");
@@ -43,7 +43,8 @@ for (const theme of ["light", "dark"] as const) {
       .getByRole("link", { name: /photosynthesis/i })
       .first()
       .click();
-    await page.getByRole("button", { name: "Generate quiz" }).click();
+    await page.getByRole("link", { name: "Make a quiz" }).click();
+    await page.getByRole("button", { name: "Create quiz" }).click();
     await page.waitForURL(/\/quizzes\//);
     await scan(page, "quiz overview");
     await page.getByLabel("After each question").check();
@@ -57,7 +58,7 @@ for (const theme of ["light", "dark"] as const) {
       .getByRole("link", { name: /photosynthesis/i })
       .first()
       .click();
-    await page.getByRole("button", { name: "Generate deck" }).click();
+    await page.getByRole("button", { name: "Flashcards" }).click();
     await page.waitForURL(/\/flashcards\//);
     await scan(page, "deck");
     await page.getByRole("button", { name: /Study due/ }).click();

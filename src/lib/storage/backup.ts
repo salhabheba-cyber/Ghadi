@@ -20,24 +20,36 @@ export class BackupError extends Error {
 
 export async function createBackup(): Promise<Backup> {
   const db = getDb();
-  const [documents, notes, quizzes, attempts, decks, cards, reviews, collections, settingsRow] =
-    await Promise.all([
-      db.documents.toArray(),
-      db.notes.toArray(),
-      db.quizzes.toArray(),
-      db.attempts.toArray(),
-      db.decks.toArray(),
-      db.cards.toArray(),
-      db.reviews.toArray(),
-      db.collections.toArray(),
-      db.settings.get(SETTINGS_KEY),
-    ]);
+  const [
+    documents,
+    guides,
+    notes,
+    quizzes,
+    attempts,
+    decks,
+    cards,
+    reviews,
+    collections,
+    settingsRow,
+  ] = await Promise.all([
+    db.documents.toArray(),
+    db.guides.toArray(),
+    db.notes.toArray(),
+    db.quizzes.toArray(),
+    db.attempts.toArray(),
+    db.decks.toArray(),
+    db.cards.toArray(),
+    db.reviews.toArray(),
+    db.collections.toArray(),
+    db.settings.get(SETTINGS_KEY),
+  ]);
   const backup = {
     app: "ghadi" as const,
     schemaVersion: BACKUP_SCHEMA_VERSION,
     exportedAt: nowIso(),
     data: {
       documents,
+      guides,
       notes,
       quizzes,
       attempts,
@@ -113,6 +125,7 @@ export async function restoreBackup(backup: Backup, mode: RestoreMode): Promise<
     "rw",
     [
       db.documents,
+      db.guides,
       db.notes,
       db.quizzes,
       db.attempts,
@@ -126,6 +139,7 @@ export async function restoreBackup(backup: Backup, mode: RestoreMode): Promise<
       if (mode === "replace") {
         await Promise.all([
           db.documents.clear(),
+          db.guides.clear(),
           db.notes.clear(),
           db.quizzes.clear(),
           db.attempts.clear(),
@@ -136,6 +150,7 @@ export async function restoreBackup(backup: Backup, mode: RestoreMode): Promise<
         ]);
       }
       await db.documents.bulkPut(d.documents);
+      await db.guides.bulkPut(d.guides);
       await db.notes.bulkPut(d.notes);
       await db.quizzes.bulkPut(d.quizzes);
       await db.attempts.bulkPut(d.attempts);

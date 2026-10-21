@@ -163,4 +163,54 @@ export class LlmProvider implements StudyProvider {
       notices: [`Summary written by ${this.modelLabel}.`, ...this.truncationNotice(input.text)],
     };
   }
+
+  /** One chunk of a long document -> teaching sections. Used by the study-guide pipeline. */
+  async generateGuideSections(
+    input: { title: string; text: string; part: number; parts: number; language: string },
+    call?: CallOptions,
+  ) {
+    const result = await this.run(
+      "guide-section",
+      {
+        title: input.title,
+        text: input.text,
+        part: input.part,
+        parts: input.parts,
+        language: input.language,
+      },
+      call,
+    );
+    if (result.task !== "guide-section")
+      throw new ProviderError("bad-response", "Unexpected result type.");
+    return result.value;
+  }
+
+  /** Overview, objectives and final summary written from the section headings and recaps only. */
+  async generateGuideOverview(
+    input: { title: string; recaps: string; language: string },
+    call?: CallOptions,
+  ) {
+    const result = await this.run(
+      "guide-overview",
+      { title: input.title, text: input.recaps, language: input.language },
+      call,
+    );
+    if (result.task !== "guide-overview")
+      throw new ProviderError("bad-response", "Unexpected result type.");
+    return result.value;
+  }
+
+  async simplify(
+    input: { concept: string; context?: string; language: string },
+    call?: CallOptions,
+  ): Promise<string> {
+    const result = await this.run(
+      "simplify",
+      { concept: input.concept, sourceExcerpt: input.context, language: input.language },
+      call,
+    );
+    if (result.task !== "simplify")
+      throw new ProviderError("bad-response", "Unexpected result type.");
+    return result.value;
+  }
 }

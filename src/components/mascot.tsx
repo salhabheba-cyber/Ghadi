@@ -113,16 +113,56 @@ export function GhadiMascot({
         fill="#2d1a0e"
       />
       {/* Side tendrils */}
-      <path d="M42 82 C38 96 40 108 44 118" stroke="#2d1a0e" strokeWidth="8" strokeLinecap="round" fill="none" />
-      <path d="M118 82 C122 96 120 108 116 118" stroke="#2d1a0e" strokeWidth="8" strokeLinecap="round" fill="none" />
+      <path
+        d="M42 82 C38 96 40 108 44 118"
+        stroke="#2d1a0e"
+        strokeWidth="8"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        d="M118 82 C122 96 120 108 116 118"
+        stroke="#2d1a0e"
+        strokeWidth="8"
+        strokeLinecap="round"
+        fill="none"
+      />
       {/* Wave accents */}
-      <path d="M50 54 C46 62 48 70 44 78" stroke="#3d2512" strokeWidth="3" strokeLinecap="round" fill="none" />
-      <path d="M110 54 C114 62 112 70 116 78" stroke="#3d2512" strokeWidth="3" strokeLinecap="round" fill="none" />
+      <path
+        d="M50 54 C46 62 48 70 44 78"
+        stroke="#3d2512"
+        strokeWidth="3"
+        strokeLinecap="round"
+        fill="none"
+      />
+      <path
+        d="M110 54 C114 62 112 70 116 78"
+        stroke="#3d2512"
+        strokeWidth="3"
+        strokeLinecap="round"
+        fill="none"
+      />
 
       {/* ── GLASSES ── */}
       {/* Frames */}
-      <circle cx="67" cy="93" r="12" stroke="#2d1a0e" strokeWidth="2.5" fill="white" fillOpacity="0.7" />
-      <circle cx="93" cy="93" r="12" stroke="#2d1a0e" strokeWidth="2.5" fill="white" fillOpacity="0.7" />
+      <circle
+        cx="67"
+        cy="93"
+        r="12"
+        stroke="#2d1a0e"
+        strokeWidth="2.5"
+        fill="white"
+        fillOpacity="0.7"
+      />
+      <circle
+        cx="93"
+        cy="93"
+        r="12"
+        stroke="#2d1a0e"
+        strokeWidth="2.5"
+        fill="white"
+        fillOpacity="0.7"
+      />
       {/* Bridge */}
       <path d="M79 93 L81 93" stroke="#2d1a0e" strokeWidth="2.5" strokeLinecap="round" />
       {/* Temples */}
@@ -136,8 +176,20 @@ export function GhadiMascot({
       {blink ? (
         <>
           {/* Closed eyes — arcs */}
-          <path d="M62 93 Q67 90 72 93" stroke="#2d1a0e" strokeWidth="2" fill="none" strokeLinecap="round" />
-          <path d="M88 93 Q93 90 98 93" stroke="#2d1a0e" strokeWidth="2" fill="none" strokeLinecap="round" />
+          <path
+            d="M62 93 Q67 90 72 93"
+            stroke="#2d1a0e"
+            strokeWidth="2"
+            fill="none"
+            strokeLinecap="round"
+          />
+          <path
+            d="M88 93 Q93 90 98 93"
+            stroke="#2d1a0e"
+            strokeWidth="2"
+            fill="none"
+            strokeLinecap="round"
+          />
         </>
       ) : (
         <>
@@ -152,13 +204,25 @@ export function GhadiMascot({
       {/* ── NOSE + MOUTH ── */}
       <circle cx="80" cy="104" r="1.5" fill="#e8a882" />
       {/* Smile */}
-      <path d="M72 110 Q80 117 88 110" stroke="#c0745a" strokeWidth="2" fill="none" strokeLinecap="round" />
+      <path
+        d="M72 110 Q80 117 88 110"
+        stroke="#c0745a"
+        strokeWidth="2"
+        fill="none"
+        strokeLinecap="round"
+      />
       {/* Cheek blush */}
       <ellipse cx="55" cy="105" rx="7" ry="4" fill="#f9a8d4" fillOpacity="0.5" />
       <ellipse cx="105" cy="105" rx="7" ry="4" fill="#f9a8d4" fillOpacity="0.5" />
 
       {/* ── HAIR HIGHLIGHT ── */}
-      <path d="M70 26 C66 30 62 36 60 44" stroke="#4a2a14" strokeWidth="3" strokeLinecap="round" fill="none" />
+      <path
+        d="M70 26 C66 30 62 36 60 44"
+        stroke="#4a2a14"
+        strokeWidth="3"
+        strokeLinecap="round"
+        fill="none"
+      />
     </svg>
   );
 }

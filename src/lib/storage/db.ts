@@ -8,6 +8,7 @@ import type {
   QuizAttempt,
   ReviewLog,
   StudyDocument,
+  StudyGuide,
 } from "@/lib/validation/schemas";
 
 export interface SettingsRow {
@@ -17,6 +18,7 @@ export interface SettingsRow {
 
 export class GhadiDB extends Dexie {
   documents!: EntityTable<StudyDocument, "id">;
+  guides!: EntityTable<StudyGuide, "id">;
   notes!: EntityTable<Note, "id">;
   quizzes!: EntityTable<Quiz, "id">;
   attempts!: EntityTable<QuizAttempt, "id">;
@@ -39,6 +41,8 @@ export class GhadiDB extends Dexie {
       collections: "id, name",
       settings: "key",
     });
+    // Additive: existing data is untouched, a table for saved study guides is added.
+    this.version(2).stores({ guides: "id, documentId, updatedAt, createdAt" });
   }
 }
 

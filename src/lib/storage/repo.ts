@@ -8,6 +8,7 @@ import {
   noteSchema,
   quizSchema,
   settingsSchema,
+  studyGuideSchema,
   attemptSchema,
   reviewLogSchema,
   type Card,
@@ -20,6 +21,7 @@ import {
   type ReviewLog,
   type Settings,
   type StudyDocument,
+  type StudyGuide,
 } from "@/lib/validation/schemas";
 import { newId, nowIso } from "@/lib/utils";
 import { applyRating, initialSchedule } from "@/lib/study/srs";
@@ -43,6 +45,23 @@ export async function saveDocument(doc: StudyDocument): Promise<StudyDocument> {
 
 export async function getDocument(id: string): Promise<StudyDocument | undefined> {
   return getDb().documents.get(id);
+}
+
+/* ------------------------------ Study guides ------------------------------ */
+
+export async function saveGuide(guide: StudyGuide): Promise<StudyGuide> {
+  const valid = studyGuideSchema.parse({ ...guide, updatedAt: nowIso() });
+  await getDb().guides.put(valid);
+  return valid;
+}
+
+/** The saved guide for a document, if one exists (one guide per document; regenerating replaces it). */
+export async function getGuideForDocument(documentId: string): Promise<StudyGuide | undefined> {
+  return getDb().guides.where("documentId").equals(documentId).first();
+}
+
+export async function deleteGuide(id: string): Promise<void> {
+  await getDb().guides.delete(id);
 }
 
 /** Deletes a document. Notes, quizzes and decks made from it are kept but unlinked. */

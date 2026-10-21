@@ -69,14 +69,15 @@ test.describe("script safety in the real browser", () => {
     await page.goto("/documents");
     await page.getByTestId("file-input").setInputFiles(TEXT_FIXTURE);
     await expect(page.getByRole("heading", { level: 1, name: "photosynthesis" })).toBeVisible();
-    await page.getByRole("button", { name: "Generate notes" }).click();
+    await page.getByRole("button", { name: "Quick study notes" }).click();
     await page.waitForURL(/\/notes\//);
     await page.goto("/documents");
     await page
       .getByRole("link", { name: /photosynthesis/i })
       .first()
       .click();
-    await page.getByRole("button", { name: "Generate quiz" }).click();
+    await page.getByRole("link", { name: "Make a quiz" }).click();
+    await page.getByRole("button", { name: "Create quiz" }).click();
     await page.waitForURL(/\/quizzes\//);
     await page.getByLabel("After each question").check();
     await page.getByRole("button", { name: "Take Exam in Ghadi" }).click();
@@ -87,7 +88,7 @@ test.describe("script safety in the real browser", () => {
       .getByRole("link", { name: /photosynthesis/i })
       .first()
       .click();
-    await page.getByRole("button", { name: "Generate deck" }).click();
+    await page.getByRole("button", { name: "Flashcards" }).click();
     await page.waitForURL(/\/flashcards\//);
     await page.getByRole("button", { name: /Study due/ }).click();
     await page.getByRole("button", { name: "Show answer" }).click();
@@ -126,7 +127,7 @@ test.describe("script safety in the real browser", () => {
     };
     await expect(page.getByText("window.__pwned=1", { exact: false }).first()).toBeVisible();
     await check();
-    await page.getByRole("button", { name: "Generate notes" }).click();
+    await page.getByRole("button", { name: "Quick study notes" }).click();
     await page.waitForURL(/\/notes\//);
     await check();
     await page.goto("/library");

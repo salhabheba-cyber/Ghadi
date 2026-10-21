@@ -13,7 +13,8 @@ test("exam options → export dialog: nothing downloads until Download, quiz-onl
   await expect(page.getByRole("heading", { level: 1, name: "photosynthesis" })).toBeVisible({
     timeout: 15_000,
   });
-  await page.getByRole("button", { name: "Generate quiz" }).click();
+  await page.getByRole("link", { name: "Make a quiz" }).click();
+  await page.getByRole("button", { name: "Create quiz" }).click();
   await expect(page).toHaveURL(/\/quizzes\/.+/, { timeout: 15_000 });
 
   let downloads = 0;
@@ -62,7 +63,8 @@ test("take exam in Ghadi: navigate, mark, refresh restores answers, submit needs
   await expect(page.getByRole("heading", { level: 1, name: "photosynthesis" })).toBeVisible({
     timeout: 15_000,
   });
-  await page.getByRole("button", { name: "Generate quiz" }).click();
+  await page.getByRole("link", { name: "Make a quiz" }).click();
+  await page.getByRole("button", { name: "Create quiz" }).click();
   await expect(page).toHaveURL(/\/quizzes\/.+/, { timeout: 15_000 });
   await page.getByRole("button", { name: "Take Exam in Ghadi" }).click();
 

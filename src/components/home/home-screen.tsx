@@ -95,7 +95,7 @@ function Home() {
 
   function imported(id: string) {
     setPanel(null);
-    router.push(`/documents/${id}`);
+    router.push(`/study/${id}`);
   }
 
   const cards = [
@@ -189,7 +189,7 @@ function Home() {
 
           <ul className="gh-quick">
             <li>
-              <Link href="/quizzes">
+              <Link href="/quizzes/new">
                 <ListChecks aria-hidden /> {t.quickQuiz}
               </Link>
             </li>

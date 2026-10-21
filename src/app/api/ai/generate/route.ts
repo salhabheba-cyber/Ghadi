@@ -16,7 +16,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 120_000;
-const UPSTREAM_TIMEOUT_MS = 120_000;
+const UPSTREAM_TIMEOUT_MS = 170_000;
 
 const bodySchema = z.object({
   task: taskNameSchema,
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const limited = rateLimit(`ai:${clientKey(request)}`, 10, 60_000);
+  const limited = rateLimit(`ai:${clientKey(request)}`, 40, 60_000);
   if (!limited.ok) {
     return jsonError(
       429,
@@ -78,7 +78,7 @@ export async function POST(request: Request) {
         user: prompt.user,
         json: true,
         temperature: 0.2,
-        maxTokens: 4096,
+        maxTokens: task === "guide-section" ? 12_000 : 4096,
       },
       { cfg: config, timeoutMs: UPSTREAM_TIMEOUT_MS },
     );

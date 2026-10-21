@@ -44,7 +44,10 @@ describe("Home screen controls", () => {
       expect(screen.getByRole("button", { name })).toBeEnabled();
     }
     expect(screen.getByRole("link", { name: "Settings" })).toHaveAttribute("href", "/settings");
-    expect(screen.getByRole("link", { name: /Quick Quiz/ })).toHaveAttribute("href", "/quizzes");
+    expect(screen.getByRole("link", { name: /Quick Quiz/ })).toHaveAttribute(
+      "href",
+      "/quizzes/new",
+    );
     expect(screen.getByRole("link", { name: /Study Notes/ })).toHaveAttribute("href", "/notes");
     expect(screen.getByRole("link", { name: /Review Cards/ })).toHaveAttribute("href", "/review");
   });
@@ -99,9 +102,7 @@ describe("Home screen controls", () => {
       },
     );
     await user.upload(input, file);
-    await waitFor(() =>
-      expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/documents\/.+/)),
-    );
+    await waitFor(() => expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/study\/.+/)));
     expect(await getDb().documents.count()).toBe(1);
   });
 
@@ -134,9 +135,7 @@ describe("Home screen controls", () => {
       "Mitosis is cell division producing two identical cells. It has four phases.",
     );
     await user.click(within(dialog).getByRole("button", { name: "Save my text as a document" }));
-    await waitFor(() =>
-      expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/documents\/.+/)),
-    );
+    await waitFor(() => expect(push).toHaveBeenCalledWith(expect.stringMatching(/^\/study\/.+/)));
   });
 });
 

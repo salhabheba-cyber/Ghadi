@@ -70,7 +70,7 @@ Every note, quiz and deck records its origin (_Offline heuristics_, _Local AI_, 
 
 ### Hosted AI setup (optional, server operators)
 
-Copy `.env.example` to `.env.local` and set `OPENAI_API_KEY` (optionally `OPENAI_MODEL`), or the four generic `GHADI_HOSTED_AI_*` variables. Keys are read only on the server and are never sent to the browser. The server builds its own prompts, caps input size, rate-limits requests (10/min per client), and validates the model's JSON output. It is **not** an open LLM proxy. See [docs/PRIVACY.md](docs/PRIVACY.md).
+Copy `.env.example` to `.env.local` and set `OPENAI_API_KEY` (optionally `OPENAI_MODEL`), or the four generic `GHADI_HOSTED_AI_*` variables. Keys are read only on the server and are never sent to the browser. The server builds its own prompts, caps input size, rate-limits requests (40/min per client), and validates the model's JSON output. It is **not** an open LLM proxy. See [docs/PRIVACY.md](docs/PRIVACY.md).
 
 ## 7. Importing documents
 
@@ -179,3 +179,13 @@ See [docs/PUBLISHING.md](docs/PUBLISHING.md) for step-by-step commands. This rep
 ## 22. License
 
 [MIT](LICENSE) © 2026 Ghadi contributors. Ghadi is an independent project with its own code, design and branding.
+
+## Study vs. Quiz
+
+Ghadi keeps two workflows apart:
+
+- **Study** ("teach me this"): Attach File / Paste URL / Attach Photos open `/study/:id`, a visual study guide (overview, objectives, sections, key terms, steps, tables, SVG flow diagrams, recaps, glossary). Long documents are processed in sections and merged. With OpenAI or Ollama configured the guide is written by the model and checked against the source; without them Ghadi builds a clearly labelled rule-based outline. Guides are saved locally and included in backups.
+- **Quiz** ("test what I know"): Quick Quiz opens `/quizzes/new` (document or topic, count, difficulty, language, types, reveal timing), then Take Exam / Export Exam.
+- **Text-quality gate**: garbled or noisy OCR text is flagged; you can remove noisy lines or correct the text by hand. Ghadi will not generate a guide, notes, cards or a quiz from unusable text.
+
+Limitations: diagrams are drawn only from relationships the guide states; Ghadi does not re-run OCR from a stored image (retake a clearer photo instead); the offline guide is an outline, not a full explanation.

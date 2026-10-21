@@ -23,6 +23,14 @@ export default function QuizzesPage() {
       <PageHeader
         title="Quizzes"
         description="Practise with questions built from your documents."
+        actions={
+          <Link
+            href="/quizzes/new"
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            <ListChecks className="h-4 w-4" aria-hidden /> New quiz
+          </Link>
+        }
       />
       {error ? <Notice tone="error">{error}</Notice> : null}
       {data && data.quizzes.length === 0 ? (
@@ -30,12 +38,12 @@ export default function QuizzesPage() {
           icon={<ListChecks className="h-8 w-8" />}
           title="No quizzes yet"
           action={
-            <Link href="/documents" className="text-brand-600 underline dark:text-brand-400">
-              Add a document
+            <Link href="/quizzes/new" className="text-brand-600 underline dark:text-brand-400">
+              Create your first quiz
             </Link>
           }
         >
-          Import a document, then choose “Generate quiz”.
+          Pick a document or a topic, and Ghadi builds an exam you can take or export.
         </EmptyState>
       ) : null}
       <ul className="space-y-2">

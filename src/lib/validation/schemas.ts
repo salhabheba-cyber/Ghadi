@@ -65,6 +65,132 @@ export const documentSchema = z.object({
 });
 export type StudyDocument = z.infer<typeof documentSchema>;
 
+/* ------------------------------ Study guides ------------------------------ */
+
+const gText = (max: number) => z.string().trim().min(1).max(max);
+
+/** Where a piece of guide content comes from, so source material and added explanation stay distinct. */
+export const guideSourceSchema = z.enum(["document", "added"]);
+
+const calloutTone = z.enum(["important", "warning", "tip"]);
+
+export const guideBlockSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("paragraph"), text: gText(4000) }),
+  z.object({
+    type: z.literal("keyPoints"),
+    title: gText(120),
+    points: z.array(gText(500)).min(1).max(12),
+  }),
+  z.object({
+    type: z.literal("definition"),
+    term: gText(120),
+    definition: gText(1200),
+    sourceExcerpt: z.string().max(600).optional(),
+    verified: z.boolean().optional(),
+  }),
+  z.object({
+    type: z.literal("steps"),
+    title: gText(160),
+    steps: z
+      .array(z.object({ title: gText(160), detail: z.string().max(800).default("") }))
+      .min(2)
+      .max(15),
+  }),
+  z.object({
+    type: z.literal("table"),
+    title: gText(160),
+    columns: z.array(gText(80)).min(2).max(6),
+    rows: z
+      .array(z.array(z.string().max(400)).min(1).max(6))
+      .min(1)
+      .max(20),
+  }),
+  z.object({
+    type: z.literal("example"),
+    title: gText(160),
+    text: gText(2000),
+    source: guideSourceSchema.default("added"),
+    sourceExcerpt: z.string().max(600).optional(),
+  }),
+  z.object({
+    type: z.literal("formula"),
+    name: gText(120),
+    expression: gText(300),
+    explanation: z.string().max(1000).default(""),
+    workedExample: z.string().max(1500).optional(),
+  }),
+  z.object({
+    type: z.literal("timeline"),
+    title: gText(160),
+    events: z
+      .array(z.object({ label: gText(80), detail: z.string().max(400).default("") }))
+      .min(2)
+      .max(15),
+  }),
+  z.object({
+    type: z.literal("flow"),
+    title: gText(160),
+    nodes: z
+      .array(z.object({ id: gText(24), label: gText(80) }))
+      .min(2)
+      .max(12),
+    edges: z
+      .array(z.object({ from: gText(24), to: gText(24), label: z.string().max(60).optional() }))
+      .min(1)
+      .max(20),
+  }),
+  z.object({ type: z.literal("callout"), tone: calloutTone, text: gText(1000) }),
+  z.object({ type: z.literal("detail"), title: gText(160), text: gText(4000) }),
+]);
+export type GuideBlock = z.infer<typeof guideBlockSchema>;
+
+export const guideSectionSchema = z.object({
+  heading: gText(160),
+  /** One-sentence "what this section is about". */
+  intro: z.string().max(600).default(""),
+  blocks: z.array(guideBlockSchema).min(1).max(40),
+  recap: z.string().max(1200).default(""),
+});
+export type GuideSection = z.infer<typeof guideSectionSchema>;
+
+export const glossaryEntrySchema = z.object({ term: gText(120), meaning: gText(800) });
+
+/** What a model returns for one chunk of a document. */
+export const aiGuideSectionsSchema = z.object({
+  sections: z.array(guideSectionSchema).min(1).max(8),
+  glossary: z.array(glossaryEntrySchema).max(30).default([]),
+  notices: z.array(z.string().max(300)).max(5).default([]),
+});
+
+/** What a model returns for the whole-document wrap-up (written from the section recaps only). */
+export const aiGuideOverviewSchema = z.object({
+  overview: gText(2500),
+  objectives: z.array(gText(300)).min(1).max(10),
+  finalSummary: gText(3000),
+});
+
+export const studyGuideSchema = z.object({
+  id,
+  documentId: id,
+  title: z.string().trim().min(1).max(200),
+  origin: originSchema,
+  language: z.string().max(40).default("same as source"),
+  overview: z.string().max(2500),
+  objectives: z.array(z.string().max(300)).max(10),
+  sections: z.array(guideSectionSchema).min(1).max(120),
+  finalSummary: z.string().max(3000),
+  glossary: z.array(glossaryEntrySchema).max(200),
+  notices: z.array(z.string().max(500)).max(20).default([]),
+  /** The learner's own notes on this guide. */
+  userNotes: z.string().max(20_000).default(""),
+  tags,
+  collectionId: id.optional(),
+  sourceChars: z.number().int().nonnegative(),
+  createdAt: timestamp,
+  updatedAt: timestamp,
+});
+export type StudyGuide = z.infer<typeof studyGuideSchema>;
+
 /* -------------------------------- Notes -------------------------------- */
 
 export const noteSectionSchema = z.object({
@@ -315,6 +441,7 @@ export const backupSchema = z.object({
   exportedAt: timestamp,
   data: z.object({
     documents: z.array(documentSchema),
+    guides: z.array(studyGuideSchema).default([]),
     notes: z.array(noteSchema),
     quizzes: z.array(quizSchema),
     attempts: z.array(attemptSchema),

@@ -3,7 +3,9 @@ import { ArrowLeft, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
-import { GeneratePanel } from "@/components/documents/generate-panel";
+import { DocActions } from "@/components/documents/doc-actions";
+import { TextReview } from "@/components/study/text-review";
+import { analyzeTextQuality } from "@/lib/study/quality";
 import {
   Badge,
   Button,
@@ -94,7 +96,10 @@ export default function DocumentPage() {
             {w}
           </Notice>
         ))}
-        <GeneratePanel doc={doc} />
+        {doc.text && analyzeTextQuality(doc.text).level === "poor" ? (
+          <TextReview doc={doc} mode="blocked" />
+        ) : null}
+        <DocActions doc={doc} />
         <Card className="space-y-3">
           <Field label="Title">
             {(fid) => (

@@ -107,14 +107,11 @@ async function preprocessImageForOcr(blob: Blob): Promise<Blob> {
 
   // Export as PNG (lossless — important for OCR accuracy)
   return new Promise<Blob>((resolve) => {
-    canvas.toBlob(
-      (b) => {
-        canvas.width = 0; // Free GPU memory
-        canvas.height = 0;
-        resolve(b ?? blob); // Fallback to original if toBlob fails
-      },
-      "image/png",
-    );
+    canvas.toBlob((b) => {
+      canvas.width = 0; // Free GPU memory
+      canvas.height = 0;
+      resolve(b ?? blob); // Fallback to original if toBlob fails
+    }, "image/png");
   });
 }
 

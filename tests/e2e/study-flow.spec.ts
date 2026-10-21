@@ -30,7 +30,7 @@ test.describe("Ghadi core study flow (offline, no AI key)", () => {
     await expect(page.getByText("words", { exact: false }).first()).toBeVisible();
 
     // Notes (heuristic, clearly labelled)
-    await page.getByRole("button", { name: "Generate notes" }).click();
+    await page.getByRole("button", { name: "Quick study notes" }).click();
     await expect(page).toHaveURL(/\/notes\/.+/, { timeout: 15_000 });
     await expect(page.getByText("Offline heuristics").first()).toBeVisible();
     await expect(page.getByText("No AI model was used", { exact: false }).first()).toBeVisible();
@@ -42,7 +42,8 @@ test.describe("Ghadi core study flow (offline, no AI key)", () => {
       .getByRole("link", { name: /photosynthesis/i })
       .first()
       .click();
-    await page.getByRole("button", { name: "Generate quiz" }).click();
+    await page.getByRole("link", { name: "Make a quiz" }).click();
+    await page.getByRole("button", { name: "Create quiz" }).click();
     await expect(page).toHaveURL(/\/quizzes\/.+/, { timeout: 15_000 });
     await page.getByRole("button", { name: "Take Exam in Ghadi" }).click();
     for (let i = 0; i < 40; i++) {
@@ -65,7 +66,7 @@ test.describe("Ghadi core study flow (offline, no AI key)", () => {
       .getByRole("link", { name: /photosynthesis/i })
       .first()
       .click();
-    await page.getByRole("button", { name: "Generate deck" }).click();
+    await page.getByRole("button", { name: "Flashcards" }).click();
     await expect(page).toHaveURL(/\/flashcards\/.+/, { timeout: 15_000 });
     await page.getByRole("button", { name: /Study due/ }).click();
     await page.getByRole("button", { name: "Show answer" }).click();

@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   aiCardsSchema,
+  aiGuideOverviewSchema,
+  aiGuideSectionsSchema,
   aiNoteSchema,
   aiQuizSchema,
   aiTextSchema,
@@ -20,7 +22,15 @@ import {
  * before it can reach storage or the UI.
  */
 
-export type TaskName = "notes" | "quiz" | "cards" | "explain" | "summary";
+export type TaskName =
+  | "notes"
+  | "quiz"
+  | "cards"
+  | "explain"
+  | "summary"
+  | "guide-section"
+  | "guide-overview"
+  | "simplify";
 
 export interface TaskPayload {
   title?: string;
@@ -35,6 +45,11 @@ export interface TaskPayload {
   correctAnswer?: string;
   userAnswer?: string;
   sourceExcerpt?: string;
+  /** For "simplify": the concept the learner selected. */
+  concept?: string;
+  /** For "guide-section": position of this chunk in the document. */
+  part?: number;
+  parts?: number;
 }
 
 export const taskPayloadSchema = z.object({
@@ -52,9 +67,21 @@ export const taskPayloadSchema = z.object({
   correctAnswer: z.string().max(2000).optional(),
   userAnswer: z.string().max(2000).optional(),
   sourceExcerpt: z.string().max(2000).optional(),
+  concept: z.string().max(1000).optional(),
+  part: z.number().int().min(1).max(200).optional(),
+  parts: z.number().int().min(1).max(200).optional(),
 });
 
-export const taskNameSchema = z.enum(["notes", "quiz", "cards", "explain", "summary"]);
+export const taskNameSchema = z.enum([
+  "notes",
+  "quiz",
+  "cards",
+  "explain",
+  "summary",
+  "guide-section",
+  "guide-overview",
+  "simplify",
+]);
 
 const SYSTEM_BASE = [
   "You are a careful study assistant inside a learning app.",
@@ -143,6 +170,45 @@ export function buildPrompt(task: TaskName, payload: TaskPayload): Prompt {
           source,
         ].join("\n\n"),
       };
+    case "guide-section":
+      return {
+        system: SYSTEM_BASE,
+        user: [
+          `You are writing part ${payload.part ?? 1} of ${payload.parts ?? 1} of a complete, friendly study guide that TEACHES the source material to a student.`,
+          "Explain every important topic in the source in simple language, but keep the correct academic terms and say what each important term means. Do not leave out important details, definitions, steps, dates, formulas or relationships that are in the source. Do not pad with things that are not in the source.",
+          "Follow the source's own structure: one section per topic/heading. Each section needs a short intro, rich blocks, and a 1-3 sentence recap.",
+          'Block types (use the ones that genuinely help; each block is an object with a "type"):',
+          '{"type":"paragraph","text"}; {"type":"keyPoints","title","points":[...]}; {"type":"definition","term","definition","sourceExcerpt"?: short verbatim quote from the source}; {"type":"steps","title","steps":[{"title","detail"}]} for processes; {"type":"table","title","columns":[...],"rows":[[...]]} for comparisons; {"type":"example","title","text","source":"document"|"added","sourceExcerpt"?} ; {"type":"formula","name","expression","explanation","workedExample"?}; {"type":"timeline","title","events":[{"label","detail"}]} only for dated/ordered events stated in the source; {"type":"flow","title","nodes":[{"id","label"}],"edges":[{"from","to","label"?}]} ONLY when the source explicitly states how things lead to or relate to one another; {"type":"callout","tone":"important"|"warning"|"tip","text"}; {"type":"detail","title","text"} for optional extra depth.',
+          'Examples: use "source":"document" only for an example that appears in the source (copy a short verbatim sourceExcerpt). Any example you create to clarify must have "source":"added".',
+          "Never invent facts, numbers, quotations or diagram relationships. If part of the source is unclear, say so in a callout instead of guessing.",
+          languageLine(payload.language),
+          'JSON shape: {"sections":[{"heading","intro","blocks":[...],"recap"}],"glossary":[{"term","meaning"}],"notices":[string]}',
+          source,
+        ].join("\n\n"),
+      };
+    case "guide-overview":
+      return {
+        system: SYSTEM_BASE,
+        user: [
+          "Below are the headings and recaps of every section of a study guide that was written from one document. Using ONLY this material, write the guide's opening overview (3-6 sentences), 3-8 learning objectives (start each with a verb such as 'Explain' or 'Compare'), and a final summary of the whole material (a short paragraph per major theme).",
+          languageLine(payload.language),
+          'JSON shape: {"overview": string, "objectives": string[], "finalSummary": string}',
+          source,
+        ].join("\n\n"),
+      };
+    case "simplify":
+      return {
+        system: SYSTEM_BASE,
+        user: [
+          "A student found the passage below hard. Explain it again in simpler words, as for a beginner, in 3-6 sentences. Keep every correct technical term but say what it means. You may add ONE short everyday analogy if it helps; say it is an analogy. Do not add facts that are not in the passage or the context.",
+          languageLine(payload.language),
+          `Passage: ${payload.concept ?? ""}`,
+          payload.sourceExcerpt ? `Context: ${payload.sourceExcerpt}` : "",
+          'JSON shape: {"text": string}',
+        ]
+          .filter(Boolean)
+          .join("\n\n"),
+      };
     case "explain":
       return {
         system: SYSTEM_BASE,
@@ -193,7 +259,9 @@ export type TaskResult =
   | { task: "notes"; value: NoteDraft }
   | { task: "quiz"; value: QuestionDraft[] }
   | { task: "cards"; value: CardDraft[] }
-  | { task: "summary" | "explain"; value: string };
+  | { task: "summary" | "explain" | "simplify"; value: string }
+  | { task: "guide-section"; value: z.infer<typeof aiGuideSectionsSchema> }
+  | { task: "guide-overview"; value: z.infer<typeof aiGuideOverviewSchema> };
 
 /** Validates raw model text for a task. Throws ProviderError("invalid-output") when it does not conform. */
 export function parseTaskOutput(task: TaskName, raw: string, modelLabel: string): TaskResult {
@@ -243,8 +311,19 @@ export function parseTaskOutput(task: TaskName, raw: string, modelLabel: string)
       if (!r.success) return fail(r.error);
       return { task, value: r.data.cards };
     }
+    case "guide-section": {
+      const r = aiGuideSectionsSchema.safeParse(json);
+      if (!r.success) return fail(r.error);
+      return { task, value: r.data };
+    }
+    case "guide-overview": {
+      const r = aiGuideOverviewSchema.safeParse(json);
+      if (!r.success) return fail(r.error);
+      return { task, value: r.data };
+    }
     case "summary":
-    case "explain": {
+    case "explain":
+    case "simplify": {
       const r = aiTextSchema.safeParse(json);
       if (!r.success) return fail(r.error);
       return { task, value: r.data.text };

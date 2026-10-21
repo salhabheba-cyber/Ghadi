@@ -92,13 +92,22 @@ test.describe("home controls", () => {
     expect(overflow).toBe(false);
   });
 
-  test("Attach File imports a real file and lands on the document page", async ({ page }) => {
+  test("Attach File imports a real file and opens the Study page (not a quiz)", async ({
+    page,
+  }) => {
     await page.goto("/");
     await page.getByTestId("home-file-input").setInputFiles(FIXTURE);
+    await expect(page).toHaveURL(/\/study\/.+/, { timeout: 15_000 });
     await expect(page.getByRole("heading", { level: 1, name: "photosynthesis" })).toBeVisible({
       timeout: 15_000,
     });
-    await expect(page.getByRole("button", { name: "Generate notes" })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Table of contents" })).toBeVisible({
+      timeout: 20_000,
+    });
+    await expect(
+      page.getByRole("link", { name: /Create a quiz from this material/ }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Take Exam in Ghadi" })).toHaveCount(0);
   });
 
   test("Paste URL opens the importer; an unreachable page shows an error, not success", async ({

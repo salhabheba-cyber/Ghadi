@@ -31,6 +31,7 @@ import {
   deleteCollection,
   deleteDeck,
   deleteDocument,
+  deleteGuide,
   deleteNote,
   deleteQuiz,
   renameCollection,
@@ -39,19 +40,27 @@ import { errorMessage, formatDate } from "@/lib/utils";
 
 const HREF: Record<ItemType, string> = {
   document: "/documents",
+  guide: "/study",
   note: "/notes",
   quiz: "/quizzes",
   deck: "/flashcards",
 };
-const TABLE = { document: "documents", note: "notes", quiz: "quizzes", deck: "decks" } as const;
+const TABLE = {
+  document: "documents",
+  guide: "guides",
+  note: "notes",
+  quiz: "quizzes",
+  deck: "decks",
+} as const;
 
 export default function LibraryPage() {
   const confirm = useConfirm();
   const toast = useToast();
   const { data, error } = useLive(async () => {
     const db = getDb();
-    const [documents, notes, quizzes, decks, collections] = await Promise.all([
+    const [documents, guides, notes, quizzes, decks, collections] = await Promise.all([
       db.documents.toArray(),
+      db.guides.toArray(),
       db.notes.toArray(),
       db.quizzes.toArray(),
       db.decks.toArray(),
@@ -69,6 +78,18 @@ export default function LibraryPage() {
         updatedAt: d.updatedAt,
         createdAt: d.createdAt,
         searchText: `${d.title} ${d.tags.join(" ")} ${d.text.slice(0, 2000)}`.toLowerCase(),
+      })),
+      ...guides.map((g) => ({
+        key: `guide:${g.id}`,
+        id: g.id,
+        type: "guide" as const,
+        title: g.title,
+        subtitle: `${g.sections.length} sections`,
+        tags: g.tags,
+        collectionId: g.collectionId,
+        updatedAt: g.updatedAt,
+        createdAt: g.createdAt,
+        searchText: `${g.title} ${g.overview} ${g.tags.join(" ")}`.toLowerCase(),
       })),
       ...notes.map((n) => ({
         key: `note:${n.id}`,
@@ -149,6 +170,7 @@ export default function LibraryPage() {
       for (const key of selected) {
         const [type, id] = key.split(":") as [ItemType, string];
         if (type === "document") await deleteDocument(id);
+        else if (type === "guide") await deleteGuide(id);
         else if (type === "note") await deleteNote(id);
         else if (type === "quiz") await deleteQuiz(id);
         else await deleteDeck(id);
